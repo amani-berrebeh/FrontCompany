@@ -13,7 +13,13 @@ import {
   Table,
 } from "react-bootstrap";
 import Breadcrumb from "Common/BreadCrumb";
-import { GoogleApiWrapper, Map, Marker, InfoWindow } from "google-maps-react";
+import {
+  GoogleApiWrapper,
+  Map,
+  Marker,
+  InfoWindow,
+  Polyline,
+} from "google-maps-react";
 import logoDark from "assets/images/logo-dark.png";
 import { Link } from "react-router-dom";
 import DataTable from "react-data-table-component";
@@ -23,37 +29,62 @@ import chauffeur from "../../../assets/images/chauffeur.png";
 import { useSelector } from "react-redux";
 import { RootState } from "../../../app/store"; // Import your RootState interface
 import { selectCurrentUser } from "../../../features/account/authSlice";
+import Swal from "sweetalert2";
+import axios from "axios";
 // import './google-map.scss';
-
-const mapStyles = {
-  height: "180%",
-};
 
 const LoadingContainer = () => <div>Loading...</div>;
 const Maptracking = (props: any) => {
   document.title = "Tracking | Bouden Coach Travel";
   const user = useSelector((state: RootState) => selectCurrentUser(state));
-  console.log("user id",user._id)
+  console.log("user id", user._id);
 
+  const notify = (msg: string) => {
+    Swal.fire({
+      position: "center",
+      icon: "success",
+      title: msg,
+      showConfirmButton: true,
+      //timer: 2000,
+    });
+  };
+
+  let path = [
+    { lat: 52.53121397525478, lng: -2.0343799253369403 },
+    { lat: 52.531403248085006, lng: -2.031837191253659 },
+    { lat: 52.5311095485165, lng: -2.0271594188472855 },
+  ];
   const [markers, setMarkers] = useState<any[]>([]);
-  useEffect(() => {
-    const URL = "http://localhost:8800"; //=== 'production' ? undefined : 'http://localhost:8800';
-    const socket = io(URL);
+  const [routeCoordinates, setRouteCoordinates] = useState<any[]>([]);
+  const URL = "http://localhost:8800"; //=== 'production' ? undefined : 'http://localhost:8800';
+  const socket = io(URL);
 
-    socket.on("live-tracking-companies-listening", (trip: any) => {
-      console.log("broadcasted trip",trip);
+  useEffect(() => {
+    socket.on("live-tracking-companies-listening", (socketData: any) => {
+      console.log("broadcasted trip", socketData);
       let tripExists = false;
       let counter = 0;
-      
+
       let temparkers = [...markers];
+
       console.log([...markers]);
-      
+
       for (let element of temparkers) {
-        console.log("element",element)
+        console.log("element", element);
         counter++;
-        if (element.id === trip.id) {
-          console.log("tripExists")
-          element.position = trip.position;
+        if (element.details.trip_details._id === socketData.trip_details._id) {
+          console.log("tripExists");
+          if (socketData.trip_details.progress === "completed") {
+            notify(
+              "Driver " +
+                socketData.details.id_driver.firstname +
+                " has completed this job"
+            );
+          } else {
+            element.details.position = socketData.position;
+            element.positions.push(socketData.position);
+          }
+          console.log("trip positions", socketData.position);
           setMarkers(temparkers);
           tripExists = true;
           break;
@@ -61,16 +92,18 @@ const Maptracking = (props: any) => {
       }
 
       if (counter === markers.length && tripExists === false) {
-
-        console.log("tripNotExists")
-        if (user._id===trip.companyId){
-          temparkers.push(trip);
+        console.log("tripNotExists");
+        if (user._id === socketData.trip_details.company_id) {
+          temparkers.push({
+            details: socketData,
+            positions: [socketData.position],
+          });
           setMarkers(temparkers);
         }
-       
       }
-      console.log(temparkers)
-      console.log(markers)
+
+      console.log(temparkers);
+      console.log(markers);
     });
 
     // Clean up function to remove event listener when component unmounts
@@ -78,6 +111,101 @@ const Maptracking = (props: any) => {
       socket.disconnect(); // Disconnect the socket connection
     };
   }, [markers]);
+
+  const drawPolyline = async (positions?: any) => {
+    console.log("Positions to be snapped", positions);
+
+    let array = positions
+      .map((position: any) => `${position.lat},${position.lng}`)
+      .join("|");
+
+    console.log("To Be snapped array", array);
+
+    try {
+      const requestUrl = `https://roads.googleapis.com/v1/snapToRoads?path=${array}&key=${"AIzaSyBbORSZJBXcqDnY6BbMx_JSP0l_9HLQSkw"}&interpolate=true`;
+
+    console.log("Request URL:", requestUrl);
+
+    const response:any = await axios.get(requestUrl);
+
+      if (response) {
+        console.log("Response", response);
+        const snappedPoints = response.snappedPoints.map((point: any) => ({
+          lat: point.location.latitude,
+          lng: point.location.longitude,
+        }));
+        setRouteCoordinates(snappedPoints);
+      }
+    } catch (error) {
+      console.error("Error snapping to road:", error);
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////////////////
+
+    // //? Polyline Solution
+    // //?setRouteCoordinates(positions);
+
+    // //? Directions Service Route Solution
+    // //TODO: Construct an array of arrays where each sub array contains 27 point positions
+    // //TODO : 1 for origin, 1 for destination, 25 for waypoints array
+
+    // let segmentsContainer: any[][] = [];
+
+    // for (let i = 0; i < positions.length; i += 27) {
+    //   const subArray: string[] = positions.slice(i, i + 27);
+    //   segmentsContainer.push(subArray);
+    // }
+
+    // console.log("segmentsContainer", segmentsContainer);
+
+    // let temp_routes = [];
+
+    // for (let i = 1; i < segmentsContainer.length; i++) {
+    //   let waypts = [];
+    //   let segment = segmentsContainer[i];
+    //   console.log("segment", segment);
+    //   for (let j = 1; j < segment.length - 1; j++) {
+    //     waypts.push({
+    //       location: segment[j],
+    //     });
+    //   }
+    //   console.log(waypts);
+    //   let result = drawRoute(segment[0], segment[segment.length - 1], waypts);
+
+    //   temp_routes.push(result);
+    // }
+    // setRouteCoordinates(temp_routes);
+  };
+
+  const drawRoute = (fromPosition: any, toPosition: any, waypts: any) => {
+    const directionsService = new google.maps.DirectionsService();
+
+    directionsService.route(
+      {
+        origin: fromPosition,
+        destination: toPosition,
+        travelMode: google.maps.TravelMode.DRIVING,
+        waypoints: waypts, //[
+        //   {
+        //     location: {
+        //       lat: 52.531403248085006,
+        //       lng: -2.031837191253659
+        //     },
+        //   },
+        // ],
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK) {
+          let route = result!.routes[0].overview_path.map((point) => {
+            return { lat: point.lat(), lng: point.lng() };
+          });
+          return route;
+        } else {
+          console.error("Error fetching directions:", status);
+        }
+      }
+    );
+  };
 
   const [navList, setNavList] = useState(150);
   function openMap() {
@@ -328,6 +456,7 @@ const Maptracking = (props: any) => {
                 {changeColor === false ? "Map" : "List"}
               </span>
             </button>
+            <button onClick={drawPolyline}>Draw Route</button>
           </div>
 
           <Row>
@@ -335,11 +464,7 @@ const Maptracking = (props: any) => {
               <Col lg={8}>
                 <Row>
                   <Col lg={12}>
-                    <div
-                      className="card-body"
-                      onMouseOver={() => setHover(true)}
-                      onMouseLeave={() => setHover(false)}
-                    >
+                    <div className="card-body">
                       <div
                         id="gmaps-types"
                         className="gmaps"
@@ -351,14 +476,13 @@ const Maptracking = (props: any) => {
                           style={{ height: "200%", width: `${navWidth}%` }}
                           initialCenter={{ lat: 52.5244734, lng: -1.9857876 }}
                         >
-                          {console.log(markers)}
-                          {
-                          markers.map((marker, index) => (
+                          {console.log("markers", markers)}
+                          {markers.map((marker, index) => (
                             <InfoWindow
                               key={index}
                               position={{
-                                lat: marker.position.lat,
-                                lng: marker.position.lng,
+                                lat: marker.details.position.lat,
+                                lng: marker.details.position.lng,
                               }} // Use the position of the first marker
                               visible={true}
                               pixelOffset={{ width: 0, height: -35 }}
@@ -369,10 +493,18 @@ const Maptracking = (props: any) => {
                                   alt=""
                                   style={{ width: "25px" }}
                                 />
-                                <span> {marker.driver}</span>
+                                <span>
+                                  {" "}
+                                  {
+                                    marker.details.trip_details.id_driver
+                                      .firstname
+                                  }
+                                </span>
                                 <br />
 
-                                <span>{marker.vehicleName}</span>
+                                <span>
+                                  {marker.details.trip_details.id_vehicle.model}
+                                </span>
                               </div>
                             </InfoWindow>
                           ))}
@@ -380,15 +512,24 @@ const Maptracking = (props: any) => {
                             <Marker
                               key={index}
                               position={{
-                                lat: marker.position.lat,
-                                lng: marker.position.lng,
+                                lat: marker.details.position.lat,
+                                lng: marker.details.position.lng,
                               }}
                               icon={{
                                 url: coach,
                                 scaledSize: new window.google.maps.Size(35, 35), // Adjust the size of the icon
                               }}
+                              onClick={() => {
+                                drawPolyline(marker.positions);
+                              }}
                             />
                           ))}
+                          <Polyline
+                            path={routeCoordinates}
+                            strokeColor="#FF1493"
+                            strokeOpacity={0.7}
+                            strokeWeight={7}
+                          />
                         </Map>
                         {navWidth === 100 ? (
                           <button

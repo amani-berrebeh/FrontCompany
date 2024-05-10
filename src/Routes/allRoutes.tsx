@@ -145,6 +145,7 @@ const authProtectedRoutes = [
   { path: "/employees/account/new-account", component: <AddNewAccount/> },
   { path: "/emloyee-attendance", component: <Attendances /> },
   { path: "/single-account", component: <SingleProfile /> },
+  { path: "/employees/myaccount", component: <MyAccount /> },
 
 //? Corporate Transport ==> Programming
 { path: "/scheduling", component: <InvoiceDetails /> },

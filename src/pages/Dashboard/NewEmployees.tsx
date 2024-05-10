@@ -2,11 +2,17 @@ import React from 'react';
 import SimpleBar from 'simplebar-react';
 import { newcustomers } from "Common/data";
 import { Link } from 'react-router-dom';
-import { useFetchEmployeeQuery} from 'features/employees/employeesSlice';
+import { useFetchEmployeeQuery, useFetchEmployeeByCompanyQuery, Employee} from 'features/employees/employeesSlice';
+import { useSelector } from "react-redux";
+import { RootState } from '../../app/store'; // Import your RootState interface
+import { selectCurrentUser } from '../../features/account/authSlice'; 
+
 
 const NewEmployees = () => {
 
-    const { data = [] } = useFetchEmployeeQuery();
+    const user = useSelector((state: RootState) => selectCurrentUser(state));
+    const { data } = useFetchEmployeeByCompanyQuery({ idCompany: user?._id! });
+    const employees: Employee[] = (data as any)?.getEmployeesByIdCompany || []; 
 
     return (
         <React.Fragment>
@@ -18,7 +24,7 @@ const NewEmployees = () => {
                     </div>
             
                     <SimpleBar style={{maxHeight: "445px"}}>
-                        {(data || []).map((item, key) => (
+                        {(employees || []).map((item, key) => (
                         <div className="p-3 border-bottom border-bottom-dashed" key={item._id}>
                             <div className="d-flex align-items-center gap-2">
                                 <div className="flex-shrink-0">
