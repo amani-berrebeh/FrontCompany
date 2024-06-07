@@ -11,7 +11,7 @@ import DashboardReducer from "../slices/dashboard/reducer";
 import { employeeSlice } from "features/employees/employeesSlice";
 import { groupSlice } from "features/groups/groupsSlice";
 import { complainSlice } from "features/complains/complainSlice";
-import { programSlice } from "features/program/programSlice";
+import { programmSlice } from "features/program/programSlice";
 import { noteSlice } from "features/notes/notesSlice";
 import { accountSlice } from "features/account/accountSlice";
 import authSlice from "features/account/authSlice";
@@ -20,6 +20,7 @@ import { contractSlice } from "features/contract/contractSlice";
 import { vehicleTypeSlice } from "features/vehicleType/vehicleTypeSlice";
 import { luggageSlice } from "features/luggage/luggageSlice";
 import { journeySlice } from "features/journey/journeySlice";
+import { passengerAndLuggageSlice } from "features/PassengerAndLuggageLimits/passerngerAndLuggageSlice";
 
 export const store = configureStore({
   reducer: {
@@ -27,13 +28,14 @@ export const store = configureStore({
     [groupSlice.reducerPath]: groupSlice.reducer,
     [complainSlice.reducerPath]: complainSlice.reducer,
     [noteSlice.reducerPath]: noteSlice.reducer,
-    [programSlice.reducerPath]: programSlice.reducer,
+    [programmSlice.reducerPath]: programmSlice.reducer,
     [accountSlice.reducerPath]: accountSlice.reducer,
     [quoteSlice.reducerPath]: quoteSlice.reducer,
     [contractSlice.reducerPath]: contractSlice.reducer,
     [vehicleTypeSlice.reducerPath]: vehicleTypeSlice.reducer,
     [luggageSlice.reducerPath]: luggageSlice.reducer,
     [journeySlice.reducerPath]: journeySlice.reducer,
+    [passengerAndLuggageSlice.reducerPath]: passengerAndLuggageSlice.reducer,
     auth: authSlice,
     Layout: LayoutReducer,
     ForgetPassword: ForgetPasswordReducer,
@@ -46,13 +48,14 @@ export const store = configureStore({
       groupSlice.middleware,
       complainSlice.middleware,
       noteSlice.middleware,
-      programSlice.middleware,
+      programmSlice.middleware,
       accountSlice.middleware,
       contractSlice.middleware,
       quoteSlice.middleware,
       journeySlice.middleware,
       luggageSlice.middleware,
       vehicleTypeSlice.middleware,
+      passengerAndLuggageSlice.middleware
     ]);
   },
 });

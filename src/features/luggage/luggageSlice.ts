@@ -22,7 +22,7 @@ export const luggageSlice = createApi({
       }),
       fetchLuggageById: builder.query<Luggage, string | void>({
         query: (_id) => ({
-          url: `/getLuggageById/${_id}`,
+          url: `/getLuggage/${_id}`,
           method: "GET",
         }),
         providesTags: ["Luggage"],

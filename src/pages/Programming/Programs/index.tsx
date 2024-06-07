@@ -9,12 +9,16 @@ import {
   Button,
   InputGroup,
   Dropdown,
+  Table,
 } from "react-bootstrap";
 import Breadcrumb from "Common/BreadCrumb";
 import { Link, useNavigate } from "react-router-dom";
 import Flatpickr from "react-flatpickr";
 import DualListBox from "react-dual-listbox";
 import "react-dual-listbox/lib/react-dual-listbox.css";
+import { useSelector } from "react-redux";
+import { RootState } from '../../../app/store'; // Import your RootState interface
+import { selectCurrentUser } from '../../../features/account/authSlice'; 
 import {
   DirectionsRenderer,
   GoogleMap,
@@ -22,19 +26,24 @@ import {
   Autocomplete,
   useJsApiLoader,
 } from "@react-google-maps/api";
-
 import Swal from "sweetalert2";
 import "./AddProgram.css";
-
+import { useAddProgrammMutation } from "features/program/programSlice";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
-import { useGetAllVehicleTypesQuery } from "../../../features/vehicleType/vehicleTypeSlice";
-import { useGetAllLuggageQuery } from "../../../features/luggage/luggageSlice";
-import { useGetAllJourneyQuery } from "../../../features/journey/journeySlice";
-import { useSelector } from "react-redux";
-import { RootState } from "app/store";
-import { selectCurrentUser } from "features/account/authSlice";
-import { useAddProgramMutation } from "features/program/programSlice";
+import {
+  useFetchVehicleTypeByIdQuery,
+  useGetAllVehicleTypesQuery,
+} from "features/vehicleType/vehicleTypeSlice";
+import {
+  useFetchLuggageByIdQuery,
+  useGetAllLuggageQuery,
+} from "features/luggage/luggageSlice";
+import {
+  useFetchJourneyByIdQuery,
+  useGetAllJourneyQuery,
+} from "features/journey/journeySlice";
+import { useGetAllPassengerAndLuggagesQuery } from "features/PassengerAndLuggageLimits/passerngerAndLuggageSlice";
 
 interface Option {
   value: string;
@@ -77,6 +86,27 @@ interface Stop {
   id: number;
   address: string;
 }
+
+interface GroupCompany {
+  groupName: string;
+  passenger_number: string;
+  id_company: string;
+  vehicle_type: string;
+  luggage_details: string;
+  passenger_limit: any[];
+  program: string;
+}
+
+interface GroupSchool {
+  groupName: string;
+  student_number: string;
+  id_school: string;
+  vehicle_type: string;
+  luggage_details: string;
+  passenger_limit: any[];
+  program: string;
+}
+
 interface RouteSegment {
   segment: number;
   startAddress: string;
@@ -89,10 +119,204 @@ interface stopTime {
   minutes: number;
 }
 
+
 const AddProgramm = (props: any) => {
-  document.title = "Program | Company Administration";
-  const navigate = useNavigate();
+  document.title = "Program | Bouden Coach Travel";
+
   const user = useSelector((state: RootState) => selectCurrentUser(state));
+
+  const { data: AllPassengersLimit = [] } =
+    useGetAllPassengerAndLuggagesQuery();
+
+  const navigate = useNavigate();
+  const [affectedCounter, setAffectedCounter] = useState<string>("0");
+
+  const [recommandedCapacityState, setRecommandedCapacityState] =
+    useState<string>("");
+  const onChangeRecommandedCapacityState = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setRecommandedCapacityState(event.target.value);
+  };
+  const onChangeSchoolGroupName = (
+    event: React.ChangeEvent<any>,
+    index: any
+  ) => {
+    const name = event.target.value;
+    const tempArray = [...schoolGroups];
+    tempArray[index].groupName = name;
+    setSchoolGroups(tempArray);
+  };
+
+  const onChangeSchoolGroupPax = (
+    event: React.ChangeEvent<any>,
+    index: any
+  ) => {
+    if (recommandedCapacityState === "") {
+      alert("Fill the total passengers number first");
+    } else {
+      const pax = event.target.value;
+      const tempArray = [...schoolGroups];
+      let prevNumber = tempArray[index].student_number;
+      let prevAffectedCounter = Number(affectedCounter) - Number(prevNumber);
+      if (prevAffectedCounter !== 0) {
+        if (
+          prevAffectedCounter + Number(pax) >
+          Number(recommandedCapacityState)
+        ) {
+          alert(
+            "The number of group(s) passengers exceed the estimated total number"
+          );
+          tempArray[index].student_number = "";
+          setAffectedCounter(prevAffectedCounter.toString());
+        } else {
+          setAffectedCounter((prevAffectedCounter + Number(pax)).toString());
+          tempArray[index].student_number = pax;
+          const customFilteredLimit = AllPassengersLimit.filter(
+            (vehcileType) => Number(pax) <= Number(vehcileType.max_passengers)
+          );
+          tempArray[index].passenger_limit = customFilteredLimit;
+        }
+      } else {
+        if (
+          prevAffectedCounter + Number(pax) >
+          Number(recommandedCapacityState)
+        ) {
+          alert(
+            "The number of group passengers exceed the estimated total number"
+          );
+          tempArray[index].student_number = "";
+          prevAffectedCounter = Number(affectedCounter) - Number(prevNumber);
+          setAffectedCounter(prevAffectedCounter.toString());
+        } else {
+          setAffectedCounter((prevAffectedCounter + Number(pax)).toString());
+          tempArray[index].student_number = pax;
+          const customFilteredVehicleType = AllPassengersLimit.filter(
+            (vehcileType) => Number(pax) <= Number(vehcileType.max_passengers)
+          );
+          tempArray[index].passenger_limit = customFilteredVehicleType;
+        }
+      }
+
+      setSchoolGroups(tempArray);
+    }
+  };
+
+  const onChangeCompanyGroupName = (
+    event: React.ChangeEvent<any>,
+    index: any
+  ) => {
+    const name = event.target.value;
+    const tempArray = [...companyGroups];
+    tempArray[index].groupName = name;
+    setCompanyGroups(tempArray);
+  };
+
+  const onChangeCompanyGroupPax = (
+    event: React.ChangeEvent<any>,
+    index: any
+  ) => {
+    if (recommandedCapacityState === "") {
+      alert("Fill the total passengers number first");
+    } else {
+      const pax = event.target.value;
+      const tempArray = [...companyGroups];
+      let prevNumber = tempArray[index].passenger_number;
+
+      let prevAffectedCounter = Number(affectedCounter) - Number(prevNumber);
+      if (prevAffectedCounter !== 0) {
+        if (
+          prevAffectedCounter + Number(pax) >
+          Number(recommandedCapacityState)
+        ) {
+          alert(
+            "The number of group(s) passengers exceed the estimated total number"
+          );
+          tempArray[index].passenger_number = "";
+          setDisabledNext(true);
+          setAffectedCounter(prevAffectedCounter.toString());
+        } else {
+          setAffectedCounter((prevAffectedCounter + Number(pax)).toString());
+          tempArray[index].passenger_number = pax;
+          const customFilteredLimit = AllPassengersLimit.filter(
+            (vehcileType) => Number(pax) <= Number(vehcileType.max_passengers)
+          );
+          tempArray[index].passenger_limit = customFilteredLimit;
+          if (Number(affectedCounter) < Number(recommandedCapacityState)) {
+            console.log("Affected counter < rc");
+            setDisabledNext(true);
+          } else if (
+            Number(affectedCounter) === Number(recommandedCapacityState)
+          ) {
+            console.log("Affected counter === rc");
+            setDisabledNext(false);
+          }
+        }
+      } else {
+        if (
+          prevAffectedCounter + Number(pax) >
+          Number(recommandedCapacityState)
+        ) {
+          alert(
+            "The number of group passengers exceed the estimated total number"
+          );
+          setDisabledNext(true);
+          tempArray[index].passenger_number = "";
+          prevAffectedCounter = Number(affectedCounter) - Number(prevNumber);
+          setAffectedCounter(prevAffectedCounter.toString());
+        } else {
+          setAffectedCounter((prevAffectedCounter + Number(pax)).toString());
+          tempArray[index].passenger_number = pax;
+          const customFilteredVehicleType = AllPassengersLimit.filter(
+            (vehcileType) => Number(pax) <= Number(vehcileType.max_passengers)
+          );
+          tempArray[index].passenger_limit = customFilteredVehicleType;
+          if (Number(affectedCounter) < Number(recommandedCapacityState)) {
+            console.log("af < rc");
+            setDisabledNext(true);
+          } else if (
+            Number(affectedCounter) === Number(recommandedCapacityState)
+          ) {
+            console.log("af === rc");
+            setDisabledNext(false);
+          }
+        }
+      }
+
+      setCompanyGroups(tempArray);
+    }
+  };
+
+  const filteredVehicleType = AllPassengersLimit.filter(
+    (vehcileType) =>
+      Number(recommandedCapacityState) <= Number(vehcileType.max_passengers)
+  );
+  const filteredLuggageDetails = AllPassengersLimit.filter(
+    (vehcileType) => vehcileType.max_passengers === recommandedCapacityState
+  );
+  // The selected Client Type
+  const [selectedClientType, setSelectedClientType] = useState<string>("");
+
+  // This function will be triggered when a radio button is selected
+  const radioHandler = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedClientType(event.target.value);
+  };
+
+  // The selected Group Creation Mode
+  const [selectedGroupCreationMode, setSelectedGroupCreationMode] =
+    useState<string>("");
+
+  // This function will be triggered when a radio button is selected
+  const radioHandlerGroupCreationMode = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setSelectedGroupCreationMode(event.target.value);
+    setRecommandedCapacityState("");
+    setSchoolGroups([]);
+    setCompanyGroups([]);
+    setRows([]);
+  };
+
   const [distance, setDistance] = useState("");
   const [duration, setDuration] = useState("");
   const [activeVerticalTab, setactiveVerticalTab] = useState<number>(1);
@@ -115,6 +339,7 @@ const AddProgramm = (props: any) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [routeDirections, setRouteDirections] =
     useState<google.maps.DirectionsResult | null>(null);
+  const [stopNames, setStopNames] = useState<string[]>([]);
   const [isMapFullScreen, setIsMapFullScreen] = useState(false);
 
   const originRef = useRef<any>(null);
@@ -136,6 +361,8 @@ const AddProgramm = (props: any) => {
   const [pickUp_date, setPickUp_date] = useState<Date | null>(null);
 
   const [stops2, setStops2] = useState<Stop[]>([]);
+  const [schoolGroups, setSchoolGroups] = useState<GroupSchool[]>([]);
+  const [companyGroups, setCompanyGroups] = useState<GroupCompany[]>([]);
   const [recap, setRecap] = useState<Recap>({
     programName: "",
     capacityRecommanded: "",
@@ -151,7 +378,10 @@ const AddProgramm = (props: any) => {
     pickUp_time: "",
   });
 
+  const [test, setTest] = useState("");
   const [test2, setTest2] = useState("");
+
+  const [date, setDate] = useState(new Date());
 
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: "AIzaSyBbORSZJBXcqDnY6BbMx_JSP0l_9HLQSkw",
@@ -160,7 +390,7 @@ const AddProgramm = (props: any) => {
 
   const [stops, setStops] = useState<google.maps.LatLng[]>([]);
 
-  const [waypts, setWaypts] = useState<google.maps.DirectionsWaypoint[]>([]);
+  const [waypts, setWaypts] = useState<any[]>([]);
 
   const [stopTimes, setStopTimes] = useState<stopTime[]>([]);
 
@@ -168,25 +398,127 @@ const AddProgramm = (props: any) => {
 
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
 
-  const [createProgram] = useAddProgramMutation();
+  const [createProgram] = useAddProgrammMutation();
+
   const { data: AllVehicleTypes = [] } = useGetAllVehicleTypesQuery();
   const { data: AllLuggages = [] } = useGetAllLuggageQuery();
   const { data: AllJourneys = [] } = useGetAllJourneyQuery();
-
   const [selectedVehicleType, setSelectedVehicletype] = useState<string>("");
+  const [selectedLuggage, setSelectedLuggage] = useState<string>("");
+  const [disabledNext, setDisabledNext] = useState<boolean>(true);
+  
   // This function is triggered when the select Vehicle Type
   const handleSelectVehicleType = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
     const value = event.target.value;
     setSelectedVehicletype(value);
+    setDisabledNext(true);
+  };
+  const generateGroups = () => {
+    const filteredVehicleTypeID = AllPassengersLimit.filter(
+      (vehcileType) => selectedVehicleType === vehcileType.vehicle_type._id
+    );
+    let prevRows = [];
+    let divisionResult = Math.floor(
+      Number(
+        Number(recommandedCapacityState) /
+          Number(filteredVehicleTypeID[0]?.max_passengers!)
+      )
+    );
+    let restResult = Number(
+      Number(recommandedCapacityState) %
+        Number(filteredVehicleTypeID[0]?.max_passengers!)
+    );
+    let totalGroupNumber = 0;
+    if (restResult !== 0) {
+      totalGroupNumber = divisionResult + 1;
+    } else {
+      totalGroupNumber = divisionResult;
+    }
+    let prevSchoolGroups = [...schoolGroups];
+    let prevCompanyGroups = [...companyGroups];
+    for (let index = 0; index < totalGroupNumber; index++) {
+      // if (selectedClientType === "School") {
+      //   prevSchoolGroups.push({
+      //     groupName: programm_name + "_" + "group" + [index + 1],
+      //     id_school: selectSchoolID,
+      //     luggage_details: selectedLuggage,
+      //     vehicle_type: selectedVehicleType,
+      //     student_number: totalGroupNumber.toString(),
+      //     passenger_limit: AllPassengersLimit,
+      //     program: "",
+      //   });
+      // }
+      // if (selectedClientType === "Company") {
+        prevCompanyGroups.push({
+          groupName: programm_name + "_" + "group" + [index + 1],
+          id_company: selectCompanyID,
+          luggage_details: selectedLuggage,
+          vehicle_type: selectedVehicleType,
+          passenger_number: totalGroupNumber.toString(),
+          passenger_limit: AllPassengersLimit,
+          program: "",
+        });
+      // }
+      prevRows.push(<h5>{programm_name + "_" + "group" + [index + 1]}</h5>);
+    }
+    setCompanyGroups(prevCompanyGroups);
+    // if (selectedClientType === "Company") {
+    //  
+    // }
+    // if (selectedClientType === "School") {
+    //   setSchoolGroups(prevSchoolGroups);
+    // }
+    setRows(prevRows);
+    setDisabledNext(false);
   };
 
-  const [selectedLuggage, setSelectedLuggage] = useState<string>("");
+  const handleCustomSelectSchoolVehicleType = (
+    event: React.ChangeEvent<HTMLSelectElement>,
+    index: any
+  ) => {
+    const value = event.target.value;
+    let prevSchoolGroups = [...schoolGroups];
+    prevSchoolGroups[index].vehicle_type = value;
+  };
+
+  const handleCustomSelectSchoolLuggageDetails = (
+    event: React.ChangeEvent<HTMLSelectElement>,
+    index: any
+  ) => {
+    const value = event.target.value;
+    let prevSchoolGroups = [...schoolGroups];
+    prevSchoolGroups[index].luggage_details = value;
+  };
+
+  const handleCustomSelectCompanyVehicleType = (
+    event: React.ChangeEvent<HTMLSelectElement>,
+    index: any
+  ) => {
+    const value = event.target.value;
+
+    let prevCompanyGroups = [...companyGroups];
+    prevCompanyGroups[index].vehicle_type = value;
+  };
+
+  const handleCustomSelectCompanyLuggageDetails = (
+    event: React.ChangeEvent<HTMLSelectElement>,
+    index: any
+  ) => {
+    const value = event.target.value;
+
+    let prevCompanyGroups = [...companyGroups];
+    prevCompanyGroups[index].luggage_details = value;
+  };
+
+  const [rows, setRows] = useState<any[]>([]);
+
   // This function is triggered when the select Luggage
   const handleSelectLuggage = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
     setSelectedLuggage(value);
+    setDisabledNext(true);
   };
 
   const [selectedJourney, setSelectedJourney] = useState<string>("");
@@ -196,49 +528,70 @@ const AddProgramm = (props: any) => {
     setSelectedJourney(value);
   };
   const [programmData, setProgrammData] = useState({
-    programName: "",
-    note: "",
-    origin_point: {
-      placeName: "",
-      coordinates: {
-        lat: 1,
-        lng: 1,
+    programDetails: {
+      programName: "",
+      origin_point: {
+        placeName: "",
+        coordinates: {
+          lat: 1,
+          lng: 1,
+        },
       },
+      stops: [
+        {
+          id: "",
+          address: {
+            placeName: "",
+            coordinates: {
+              lat: 0,
+              lng: 0,
+            },
+          },
+          time: "",
+        },
+      ],
+      destination_point: {
+        placeName: "",
+        coordinates: {
+          lat: 1,
+          lng: 1,
+        },
+      },
+      pickUp_date: "",
+      droppOff_date: "",
+      freeDays_date: [""],
+      exceptDays: [""],
+      recommanded_capacity: "",
+      extra: [""],
+      notes: "",
+      journeyType: "",
+      dropOff_time: "",
+      pickUp_Time: "",
+      workDates: [""],
+      company_id: user._id,
+      school_id: "",
+      invoiceFrequency: "",
+      within_payment_days: "",
+      total_price: "",
+      unit_price: "",
+      program_status: [
+        {
+          status: "",
+          date_status: "",
+        },
+      ],
     },
-    stops: [
-      {
-        id: "",
-        address: "",
-        time: "",
-      },
-    ],
-    destination_point: {
-      placeName: "",
-      coordinates: {
-        lat: 1,
-        lng: 1,
-      },
+    groups: {
+      type: "",
+      groupCollection: [
+        {
+          groupName: "",
+          program: "",
+          vehicle_type: "",
+          luggage_details: "",
+        },
+      ],
     },
-    pickUp_date: "",
-    vehiculeType: "",
-    luggage: "",
-    journeyType: "",
-    droppOff_date: "",
-    freeDays_date: [""],
-    exceptDays: [""],
-    recommanded_capacity: "",
-    extra: [""],
-    notes: "",
-    dropOff_time: "",
-    pickUp_Time: "",
-    workDates: [""],
-    company_id: "",
-    program_status: [
-      {
-        status: "",
-        date_status: "",
-      },
-    ],
   });
   const notify = () => {
     Swal.fire({
@@ -249,20 +602,51 @@ const AddProgramm = (props: any) => {
       timer: 2000,
     });
   };
-  const onChangeProgramms = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setProgrammData((prevState) => ({
-      ...prevState,
-      [e.target.id]: e.target.value,
-    }));
+
+  // const { data: allSchools = [] } = useGetAllSchoolsQuery();
+  // const { data: allCompanies = [] } = useGetAllCompanyQuery();
+
+  const [selectSchoolID, setSelectedSchoolID] = useState<string>("");
+  // This function is triggered when the select SchoolID
+  const handleSelectSchoolID = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const value = event.target.value;
+    setSelectedSchoolID(value);
   };
-  const onChangeProgrammsSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setProgrammData((prevState) => ({
-      ...prevState,
-      [e.target.id]: e.target.value,
-    }));
+
+  const [selectCompanyID, setSelectedCompanyID] = useState<string>("");
+  // This function is triggered when the select CompanyID
+  const handleSelectCompanyID = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const value = event.target.value;
+    setSelectedCompanyID(value);
   };
-  const onChangeProgrammsNotes = (
-    e: React.ChangeEvent<HTMLTextAreaElement>
+  const [programm_name, setProgrammName] = useState<string>("");
+  const onChangeProgramName = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setProgrammName(event.target.value);
+  };
+
+  const [programm_notes, setProgrammNotes] = useState<string>("");
+  const onChangeProgramNotes = (
+    event: React.ChangeEvent<HTMLTextAreaElement>
+  ) => {
+    setProgrammNotes(event.target.value);
+  };
+
+  const [programm_paymentDays, setProgrammPaymentDays] = useState<string>("");
+  const onChangeProgramPaymentDays = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setProgrammPaymentDays(event.target.value);
+  };
+  // const { data: oneSchool } = useFetchSchoolByIdQuery(selectSchoolID);
+
+  // const { data: oneCompany } = useFetchCompanyByIdQuery(selectCompanyID);
+
+  const onChangeProgramms = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     setProgrammData((prevState) => ({
       ...prevState,
@@ -272,38 +656,79 @@ const AddProgramm = (props: any) => {
   const onSubmitProgramm = (e: React.FormEvent<HTMLFormElement>) => {
     try {
       e.preventDefault();
-
       createProgram(programmData)
         .then(() => notify())
-        .then(() => navigate("/programming/list-of-programs"));
+        .then(() => navigate("/list-of-programs"));
     } catch (error) {
       console.log(error);
     }
   };
 
   const handleAddStopClick = (address: string) => {
-    console.log("stops2", stops2);
     setStops2((prevStops) => [
       ...prevStops,
       { id: prevStops.length + 1, address },
     ]);
   };
 
-  const handleRemoveStopClick = (idToRemove: any) => {
-    console.log(waypts);
-    setStops2((prevStops) => {
-      console.log("handleRemoveStopClick called with ID:", idToRemove);
-      const updatedStops = prevStops.filter((stop) => stop.id !== idToRemove);
+  const handleAddGroupClick = () => {
+      let prevG = [...companyGroups];
+      let name = programm_name + "_" + "group" + (prevG.length + 1);
+      setCompanyGroups((prevGroups) => [
+        ...prevGroups,
+        {
+          groupName: name,
+          passenger_number: "",
+          id_company: user?._id!,
+          vehicle_type: "",
+          luggage_details: "",
+          passenger_limit: [],
+          program: "",
+        },
+      ]);
+    console.log("companyGroups", companyGroups)
+  };
 
+  const handleRemoveStopClick = (idToRemove: any) => {
+    setStops2((prevStops) => {
+      const updatedStops = prevStops.filter((stop) => stop.id !== idToRemove);
       return updatedStops;
     });
 
     const newWaypts = [...waypts];
     newWaypts.splice(idToRemove - 1, 1);
-    console.log(newWaypts);
     setWaypts(newWaypts);
-    console.log(waypts);
     calculateRoute();
+  };
+
+  const handleRemoveStudentGroupClick = (index: any) => {
+    let prevGroups = [...schoolGroups];
+
+    let prevAffectedNumber = Number(affectedCounter);
+    prevAffectedNumber -= Number(prevGroups[index]?.student_number!);
+    setAffectedCounter(String(prevAffectedNumber));
+
+    if (prevGroups.length === 0) {
+      prevGroups = [];
+    } else {
+      prevGroups.splice(index, 1);
+    }
+    setSchoolGroups(prevGroups);
+  };
+
+  const handleRemoveCompanyGroupClick = (index: any) => {
+    let prevGroups = [...companyGroups];
+
+    let prevAffectedNumber = Number(affectedCounter);
+    prevAffectedNumber -= Number(prevGroups[index]?.passenger_number!);
+    setAffectedCounter(String(prevAffectedNumber));
+
+    if (prevGroups.length === 0) {
+      prevGroups = [];
+    } else {
+      prevGroups.splice(index, 1);
+    }
+    setCompanyGroups(prevGroups);
   };
 
   const handleAddStopClickWrapper = (address: string) => {
@@ -343,47 +768,18 @@ const AddProgramm = (props: any) => {
     pickUp_date,
     pickUp_time,
   ]);
-  var hours = String(
-    Math.floor(
-      (Number(test2!) / 60 +
-        pickUp_time?.getMinutes()! +
-        pickUp_time?.getHours()! * 60) /
-        60
-    )
-  ).padStart(2, "0");
-
-  var minutes = String(
-    Math.round(
-      (Number(test2!) / 60 +
-        pickUp_time?.getMinutes()! +
-        pickUp_time?.getHours()! * 60) %
-        60
-    )
-  ).padStart(2, "0");
-  console.log(hours + ":" + minutes);
-
   const handlePickupTime = (selectedDates: any) => {
     const formattedTime = selectedDates[0];
-    // .toLocaleTimeString([], {
-    //   hour: "2-digit",
-    //   minute: "2-digit",
-    // });
     setPickUp_time(formattedTime);
-    console.log("Hello Fatma");
   };
 
   const handleStopTime = (selectedTime: any, index: number) => {
-    console.log("indexx", index);
     const formattedTime = selectedTime[0];
-    console.log(formattedTime);
     let hour = formattedTime?.getHours();
     let minute = formattedTime?.getMinutes();
-
     let tempStopTimes = [...stopTimes];
-
     let newSelectedTime =
       String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
-    console.log("newSelectedTime", newSelectedTime);
 
     tempStopTimes[index] = {
       hours: hour,
@@ -404,11 +800,9 @@ const AddProgramm = (props: any) => {
 
     if (comparisonTime === 2) {
       duration = calculateDuration(apiTime, newSelectedTime);
-      console.log("duration", duration);
     }
     if (comparisonTime === 1) {
       duration = calculateDuration(newSelectedTime, apiTime);
-      console.log("duration", duration);
     }
     for (let i = index + 1; i < stopTimes.length; i++) {
       let oldTime =
@@ -433,18 +827,15 @@ const AddProgramm = (props: any) => {
     }
 
     setStopTimes(tempStopTimes);
-    console.log("stoptimes", stopTimes);
   };
 
   const handleDateClose = (selectedDates: any) => {
     let tempStopTimes = stopTimes;
-    console.log("Selected date:", selectedDates[0]);
     for (let i = 0; i < tempStopTimes.length; i++) {
       tempStopTimes[i].hours = 0;
       tempStopTimes[i].minutes = 0;
     }
     setStopTimes(tempStopTimes);
-    console.log("stoptimes", stopTimes);
   };
 
   const handleDateChange1 = (selectedDates: Date[]) => {
@@ -493,7 +884,6 @@ const AddProgramm = (props: any) => {
         currentDate.setDate(currentDate.getDate() + 1);
       }
     }
-    // console.log("workDates", workDates);
     return workDates;
   };
 
@@ -507,7 +897,7 @@ const AddProgramm = (props: any) => {
     }
 
     let testDays = [];
-    for (let freeDay of programmData.freeDays_date) {
+    for (let freeDay of programmData.programDetails.freeDays_date) {
       let day = createDateFromStrings(freeDay, "00:00:00");
 
       let year = day.getFullYear();
@@ -533,6 +923,10 @@ const AddProgramm = (props: any) => {
     return null;
   };
 
+  const OneVehicleType = useFetchVehicleTypeByIdQuery(selectedVehicleType);
+  const OneLuggage = useFetchLuggageByIdQuery(selectedLuggage);
+  const OneJourney = useFetchJourneyByIdQuery(selectedJourney);
+
   const handleDayClick = (value: Date) => {
     const dayOfWeek = value.getDay();
     const selectedDayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -547,6 +941,24 @@ const AddProgramm = (props: any) => {
     }
   };
 
+  const [quoteUnitPrice, setQuoteUnitPrice] = useState<number>();
+  const [contractTotalPrice, setContractTotalPrice] = useState<number>();
+
+  const onChangeUnitPrice = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setQuoteUnitPrice(parseInt(event.target.value));
+    setContractTotalPrice(parseInt(event.target.value) * getWorkDates().length);
+  };
+
+  const [selectedInvoiceFrequency, setSelectedInvoiceFrequency] =
+    useState<string>("");
+  // This function is triggered when the select Invoice Frequency
+  const handleSelectInvoiceFrequency = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const value = event.target.value;
+    setSelectedInvoiceFrequency(value);
+  };
+
   const tileDisabled = ({ date }: any) => {
     return date < pickUp_date! || date > dropOff_date!;
   };
@@ -556,41 +968,71 @@ const AddProgramm = (props: any) => {
       <>
         <Row className="d-flex resume-title">
           <span className="title"> Journey Name: </span>{" "}
-          <span className="title-value">{programmData.programName}</span>
+          <span className="title-value">
+            {programmData.programDetails.programName}
+          </span>
         </Row>
-        <Row className="d-flex justify-content-space-between">
+        <Row className="d-flex">
           <Col>
             <div className="table-responsive">
               <table className="table table-sm table-borderless align-middle description-table">
                 <tbody>
+                  {/* <tr>
+                    <td>
+                      <b>Client </b>
+                      {oneCompany === undefined ? (
+                        <p>{oneSchool?.name!}</p>
+                      ) : (
+                        <p>{oneCompany?.name!}</p>
+                      )}
+                    </td>
+                  </tr> */}
                   <tr>
                     <td>
                       <b>Start Date </b>
-                      <p>{programmData.pickUp_date}</p>
+                      <p>{programmData.programDetails.pickUp_date}</p>
                     </td>
                     <td>
                       <b>End Date </b>
-                      <p>{programmData.droppOff_date}</p>
+                      <p>{programmData.programDetails.droppOff_date}</p>
                     </td>
                   </tr>
                   <tr>
                     <td>
                       <b>Origin Address</b>
-                      <p>{programmData.origin_point.placeName}</p>
+                      <p>
+                        {programmData.programDetails.origin_point.placeName}
+                      </p>
                     </td>
                     <td>
-                      <b>Pick Up Time </b> <p> {programmData.pickUp_Time}</p>
+                      <b>Pick Up Time </b>{" "}
+                      <p> {programmData.programDetails.pickUp_Time}</p>
                     </td>
                   </tr>
                   <tr>
                     <td>
                       <b> Destination Address: </b>
-                      <p> {programmData.destination_point.placeName}</p>
+                      <p>
+                        {" "}
+                        {
+                          programmData.programDetails.destination_point
+                            .placeName
+                        }
+                      </p>
                     </td>
                     <td>
-                      <b>Drop Off Time </b> <p> {programmData.dropOff_time}</p>
+                      <b>Drop Off Time </b>{" "}
+                      <p> {programmData.programDetails.dropOff_time}</p>
                     </td>
                   </tr>
+                </tbody>
+              </table>
+            </div>
+          </Col>
+          <Col>
+            <div className="table-responsive">
+              <table className="table table-sm table-borderless align-middle description-table">
+                <tbody>
                   <tr>
                     <td>
                       <b>List of Stops</b>
@@ -599,7 +1041,6 @@ const AddProgramm = (props: any) => {
                       <b>Stop Time</b>
                     </td>
                   </tr>
-
                   {waypts.map((value, index) => (
                     <tr key={index}>
                       <td>{value.location?.toString()}</td>
@@ -621,31 +1062,68 @@ const AddProgramm = (props: any) => {
                   <tr>
                     <td>
                       <b>Capacity Recommended</b>{" "}
-                      <p> {programmData.recommanded_capacity}</p>
+                      <p> {programmData.programDetails.recommanded_capacity}</p>
                     </td>
+                  </tr>
+                  <tr>
                     <td>
-                      <p className="legend-container">
-                        Excepted days{" "}
-                        <span className="legend bg-except-day"></span>
-                      </p>
+                      <b>Vehicle Type</b>{" "}
+                      <p>{OneVehicleType.currentData?.type}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Luggage Details</b>{" "}
+                      <p>{OneLuggage.currentData?.description}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Journey Type</b> <p>{OneJourney.currentData?.type}</p>
                     </td>
                   </tr>
                   <tr>
                     <td>
                       <b> Selected Options </b>{" "}
-                      <p>{programmData.extra.join(", ")}</p>
+                      <p>{programmData.programDetails.extra.join(", ")}</p>
                     </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Col>
+          <Col>
+            <div className="table-responsive">
+              <table className="table table-sm table-borderless align-middle description-table">
+                <tbody>
+                  <tr>
                     <td>
                       <p className="legend-container">
-                        Current day <span className="legend bg-now-day"></span>
+                        <span className="legend working_days_bg"></span>
+                        Working days{" "}
                       </p>
                     </td>
                   </tr>
                   <tr>
-                    <td></td>
                     <td>
                       <p className="legend-container">
-                        Free days <span className="legend bg-free-day"></span>
+                        <span className="legend bg-now-day"></span>Current day
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <p className="legend-container">
+                        <span className="legend bg-except-day"></span>Excepted
+                        days{" "}
+                      </p>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td>
+                      <p className="legend-container">
+                        <span className="legend bg-free-day"></span>Free days
                       </p>
                     </td>
                   </tr>
@@ -654,32 +1132,26 @@ const AddProgramm = (props: any) => {
             </div>
           </Col>
         </Row>
-        <b>Work Dates: </b>
-        <br />
-
-        <div className="calender-container">
-          <Calendar tileClassName={tileClassName} tileDisabled={tileDisabled} />
-        </div>
+        <Row>
+          <Col lg={3}>
+            <b>Work Dates: </b>
+          </Col>
+          <Col lg={9}>
+            <div className="calender-container">
+              <Calendar
+                tileClassName={tileClassName}
+                tileDisabled={tileDisabled}
+              />
+            </div>
+          </Col>
+        </Row>
       </>
     );
   };
 
-  // const isJourneyStepValid = () => {
-  //   return (
-  //     journeyName.trim() !== "" &&
-  //     originRef.current?.value.trim() !== "" &&
-  //     destinationRef.current?.value.trim() !== ""
-  //   );
-  // };
   const isJourneyStepValid = () => {
-    return (
-      programmData.programName.trim() !== ""
-
-      // originRef.current?.value.trim() !== "" &&
-      // destinationRef.current?.value.trim() !== ""
-    );
+    return programm_name.trim() !== "";
   };
-
   const isTripTimesStepValid = () => {
     const pickupTimeInput = document.getElementById(
       "pickUp_time"
@@ -718,38 +1190,50 @@ const AddProgramm = (props: any) => {
   };
 
   const isRecommandedCapacityStepValid = () => {
-    return programmData.recommanded_capacity.trim() !== "";
+    return recommandedCapacityState.trim() !== "";
   };
 
   const isNextButtonDisabled = () => {
     switch (activeVerticalTab) {
       case 1:
         return !isJourneyStepValid();
-
       case 2:
         return (
           !isRunDatesStepValid() ||
           !isOptionsStepValid() ||
           !isFreeDaysStepValid()
         );
-      case 3:
-        return !isRecommandedCapacityStepValid();
+      // case 3:
+      //   return disabledNext === false;
       default:
         return false;
     }
   };
   const handleNextStep = (isResume: boolean) => {
     if (isResume === true) {
-      programmData["extra"] = selected;
-      programmData["company_id"]= user?._id!
-      programmData["program_status"] = [
+      programmData["programDetails"]["programName"] = programm_name;
+      programmData["programDetails"]["extra"] = selected;
+        programmData["programDetails"]["company_id"] = user?._id!;
+      programmData["programDetails"]["exceptDays"] = selected1;
+      programmData["programDetails"]["recommanded_capacity"] =
+        recommandedCapacityState;
+      // programmData["programDetails"]["unit_price"] = quoteUnitPrice!.toFixed(2);
+      // programmData["programDetails"]["total_price"] =
+      //   contractTotalPrice!.toFixed(2);
+      // programmData["programDetails"]["invoiceFrequency"] =
+      //   selectedInvoiceFrequency;
+      programmData["programDetails"]["workDates"] = getWorkDates();
+      programmData["programDetails"]["program_status"] = [
         {
           status: "Pending",
           date_status: "",
         },
       ];
-      programmData["exceptDays"] = selected1;
-      programmData["workDates"] = getWorkDates();
+
+      programmData["programDetails"]["notes"] = programm_notes;
+
+      programmData["programDetails"]["within_payment_days"] =
+        programm_paymentDays;
 
       let freeDates = [];
 
@@ -768,13 +1252,45 @@ const AddProgramm = (props: any) => {
         freeDates.push(date);
       }
 
-      console.log(freeDates);
-      programmData["freeDays_date"] = freeDates;
-      programmData["journeyType"] = selectedJourney;
-      programmData["luggage"] = selectedLuggage;
-      programmData['vehiculeType'] = selectedVehicleType;
-      programmData['company_id'] = user?._id! ;
+      programmData["programDetails"]["freeDays_date"] = freeDates;
+      programmData["programDetails"]["journeyType"] = selectedJourney;
+      ////////////////////////////////////////////////////////////////////
 
+      // if (selectedClientType === "School") {
+      //   let validSchoolGroups = [];
+      //   for (let index = 0; index < schoolGroups.length; index++) {
+      //     const group = {
+      //       groupName: schoolGroups[index].groupName,
+      //       student_number: schoolGroups[index].student_number,
+      //       id_school: schoolGroups[index].id_school,
+      //       vehicle_type: schoolGroups[index].vehicle_type,
+      //       luggage_details: schoolGroups[index].luggage_details,
+      //       program: schoolGroups[index].program,
+      //     };
+      //     validSchoolGroups.push(group);
+      //   }
+      //   programmData["groups"]["type"] = selectedClientType;
+      //   programmData["groups"]["groupCollection"] = validSchoolGroups;
+      // }
+
+      // if (selectedClientType === "Company") {
+        let validCompanyGroups = [];
+        for (let index = 0; index < companyGroups.length; index++) {
+          const group = {
+            groupName: companyGroups[index].groupName,
+            passenger_number: companyGroups[index].passenger_number,
+            id_company: companyGroups[index].id_company,
+            vehicle_type: companyGroups[index].vehicle_type,
+            luggage_details: companyGroups[index].luggage_details,
+            program: companyGroups[index].program,
+          };
+          validCompanyGroups.push(group);
+        }
+        console.log("validCompanyGroups",validCompanyGroups)
+        programmData["groups"]["type"] = "Company";
+        programmData["groups"]["groupCollection"] = validCompanyGroups;
+      // }
+      ////////////////////////////////////////////////////////////////////
       const dropYear = dropOff_date!.getFullYear();
       const dropMonth = dropOff_date!.getMonth() + 1;
       const dropDay = dropOff_date!.getDate().toLocaleString();
@@ -785,7 +1301,7 @@ const AddProgramm = (props: any) => {
         String(dropMonth).padStart(2, "0") +
         "-" +
         String(dropDay).padStart(2, "0");
-      programmData["droppOff_date"] = dropOffDate;
+      programmData["programDetails"]["droppOff_date"] = dropOffDate;
 
       const pickYear = pickUp_date!.getFullYear();
       const pickMonth = pickUp_date!.getMonth() + 1;
@@ -797,20 +1313,20 @@ const AddProgramm = (props: any) => {
         String(pickMonth).padStart(2, "0") +
         "-" +
         String(pickDay).padStart(2, "0");
-      programmData["pickUp_date"] = pickUpDate;
+      programmData["programDetails"]["pickUp_date"] = pickUpDate;
 
       let pickUpHour = String(pickUp_time?.getHours()).padStart(2, "0");
       let pickUpMinute = String(pickUp_time?.getMinutes()).padStart(2, "0");
 
       let pickTime = pickUpHour + ":" + pickUpMinute;
 
-      programmData["pickUp_Time"] = pickTime;
+      programmData["programDetails"]["pickUp_Time"] = pickTime;
 
       let destTime =
         String(stopTimes[stopTimes.length - 1]?.hours).padStart(2, "0") +
         ":" +
         String(stopTimes[stopTimes.length - 1]?.minutes).padStart(2, "0");
-      programmData["dropOff_time"] = destTime;
+      programmData["programDetails"]["dropOff_time"] = destTime;
 
       const destinationPoint = destinationRef.current;
 
@@ -819,7 +1335,7 @@ const AddProgramm = (props: any) => {
         destinationPoint.placeName &&
         destinationPoint.coordinates
       ) {
-        programmData["destination_point"] = {
+        programmData["programDetails"]["destination_point"] = {
           placeName: destinationPoint.placeName,
           coordinates: destinationPoint.coordinates,
         };
@@ -846,7 +1362,11 @@ const AddProgramm = (props: any) => {
       for (let i = 0; i < waypts.length; i++) {
         stops.push({
           id: "",
-          address: String(waypts[i].location),
+          address: {
+            placeName: waypts[i].location,
+            coordinates: waypts[i].coordinates,
+          },
+
           time:
             String(stopTimes[i].hours).padStart(2, "0") +
             ":" +
@@ -854,7 +1374,8 @@ const AddProgramm = (props: any) => {
         });
       }
 
-      programmData["stops"] = stops;
+      programmData["programDetails"]["stops"] = stops;
+      console.log(programmData);
     }
     if (!isNextButtonDisabled()) {
       setactiveVerticalTab(activeVerticalTab + 1);
@@ -862,6 +1383,7 @@ const AddProgramm = (props: any) => {
       alert("Please fill all required fields before proceeding.");
     }
   };
+
   if (!isLoaded) {
     return <p>Loading!!!!!</p>;
   }
@@ -891,22 +1413,21 @@ const AddProgramm = (props: any) => {
 
         setRecap((prevRecap) => ({
           ...prevRecap,
-          originRef: name ?? '',
+          originRef: name!,
         }));
 
-        setProgrammData((prevData) => ({
-          ...prevData,
-          origin_point: {
-            placeName: name ?? '',
-            coordinates: coordinates,
-          },
-        }));
-
+        // setProgrammData((prevData) => ({
+        //   ...prevData,
+        //   origin_point: {
+        //     placeName: name!,
+        //     coordinates: coordinates,
+        //   },
+        // }));
+        programmData["programDetails"]["origin_point"].placeName = name!;
+        programmData["programDetails"]["origin_point"].coordinates =
+          coordinates!;
         const status = place.business_status;
         const formattedAddress = place.formatted_address;
-        console.log(`Name: ${name}`);
-        console.log(`Business Status: ${status}`);
-        console.log(`Formatted Address: ${formattedAddress}`);
       } else {
         console.error("Location not found in place object");
       }
@@ -921,7 +1442,6 @@ const AddProgramm = (props: any) => {
         searchStop as unknown as google.maps.places.Autocomplete
       ).getPlace();
       const name = place.name;
-      console.log("place", place);
       const location = place.geometry?.location;
       if (location) {
         const nom = { lat: location.lat(), lng: location.lng() };
@@ -931,13 +1451,13 @@ const AddProgramm = (props: any) => {
         const formattedAddress = place.formatted_address;
         const wayPoint = {
           location: formattedAddress,
+          coordinates: {
+            lat: nom.lat,
+            lng: nom.lng,
+          },
           stopover: true,
         };
         setWaypts((waypts) => [...waypts, wayPoint]);
-
-        console.log(`Name: ${name}`);
-        console.log(`Business Status: ${status}`);
-        console.log(`Formatted Address: ${formattedAddress}`);
       } else {
         console.error("Location not found in place object");
       }
@@ -959,22 +1479,21 @@ const AddProgramm = (props: any) => {
 
         setRecap((prevRecap) => ({
           ...prevRecap,
-          destinationRef: name ?? '',
+          destinationRef: name!,
         }));
 
-        setProgrammData((prevData) => ({
-          ...prevData,
-          destination_point: {
-            placeName: name ?? '',
-            coordinates: coordinates,
-          },
-        }));
-
+        // setProgrammData((prevData) => ({
+        //   ...prevData,
+        //   destination_point: {
+        //     placeName: name!,
+        //     coordinates: coordinates,
+        //   },
+        // }));
+        programmData["programDetails"]["destination_point"].placeName = name!;
+        programmData["programDetails"]["destination_point"].coordinates =
+          coordinates!;
         const status = place.business_status;
         const formattedAddress = place.formatted_address;
-        console.log(`Name: ${name}`);
-        console.log(`Business Status: ${status}`);
-        console.log(`Formatted Address: ${formattedAddress}`);
       } else {
         console.error("Location not found in place object");
       }
@@ -1004,6 +1523,7 @@ const AddProgramm = (props: any) => {
   }
 
   async function calculateRoute(): Promise<void> {
+    //stopTimes = [];
     setOriginSwitchRef(originRef?.current!.value);
     setDestSwitchRef(destinationRef?.current!.value);
 
@@ -1019,13 +1539,19 @@ const AddProgramm = (props: any) => {
     setLoading(true);
 
     const directionsService = new google.maps.DirectionsService();
-
+    let waypoints = [];
+    for (let point of waypts) {
+      waypoints.push({
+        location: point.location,
+        stopover: true,
+      });
+    }
     directionsService.route(
       {
         origin: originRef.current.value,
         destination: destinationRef.current.value,
         travelMode: google.maps.TravelMode.DRIVING,
-        waypoints: waypts,
+        waypoints: waypoints,
       },
       (result, status) => {
         setLoading(false);
@@ -1033,25 +1559,23 @@ const AddProgramm = (props: any) => {
         if (status === google.maps.DirectionsStatus.OK) {
           setDirectionsResponse(result);
           setRouteDirections(result);
-          console.log(result)
 
-          const selectedRoute = result!.routes.find((route) => {
+          const selectedRoute = result?.routes!.find((route) => {
             const segments = route.legs.map((leg, index) => ({
               segment: index + 1,
               startAddress: leg.start_address,
               endAddress: leg.end_address,
-              distance: leg.distance!.text,
-              duration: leg.duration!.text,
+              distance: leg?.distance!.text!,
+              duration: leg?.duration!.text!,
             }));
             setRouteSegments(segments);
 
             let durations = route.legs.map((leg, index) => ({
-              duration: leg?.duration?.value,
+              duration: leg?.duration!.value!,
             }));
-            console.log("durations", durations);
-            const hours_first = Math.floor(durations[0]?.duration! / 3600);
+            const hours_first = Math.floor(durations[0].duration / 3600);
             const minutes_first = Math.floor(
-              (durations[0]?.duration! % 3600) / 60
+              (durations[0].duration % 3600) / 60
             );
 
             let pickUpHour = String(pickUp_time?.getHours()).padStart(2, "0");
@@ -1066,10 +1590,9 @@ const AddProgramm = (props: any) => {
               minutes_first
             );
             let temporarryTimes = [time_first];
-            console.log("temporarryTimes", temporarryTimes);
             for (let i = 1; i < durations.length; i++) {
-              const hours = Math.floor(durations[i]?.duration! / 3600);
-              const minutes = Math.floor((durations[i].duration! % 3600) / 60);
+              const hours = Math.floor(durations[i].duration / 3600);
+              const minutes = Math.floor((durations[i].duration % 3600) / 60);
 
               const time = addDurationToTime(
                 String(temporarryTimes[i - 1]?.hours) +
@@ -1080,9 +1603,7 @@ const AddProgramm = (props: any) => {
               );
               temporarryTimes.push(time);
             }
-            console.log(temporarryTimes);
             setStopTimes(temporarryTimes);
-            console.log("Plan route stop times", stopTimes);
           });
 
           if (!selectedRoute) {
@@ -1102,7 +1623,6 @@ const AddProgramm = (props: any) => {
   }
 
   const createDateFromStrings = (YyyyMmDd: string, HhMmSs: string) => {
-    //*var d1 = new Date('2020-03-10, 10:10:10'); //
     let date = new Date(YyyyMmDd + ", " + HhMmSs);
     return date;
   };
@@ -1140,19 +1660,12 @@ const AddProgramm = (props: any) => {
     const newHours = Math.floor(totalMinutes / 60);
     const newMinutes = totalMinutes % 60;
 
-    // return `${String(newHours).padStart(2, "0")}:${String(newMinutes).padStart(
-    //   2,
-    //   "0"
-    // )}`;
-
     return {
       hours: newHours,
       minutes: newMinutes,
     };
   };
   const calculateDuration = (startTime: string, endTime: string) => {
-    console.log("startTime", startTime);
-    console.log("endTime", endTime);
     const [startHours, startMinutes] = startTime.split(":").map(Number);
     const [endHours, endMinutes] = endTime.split(":").map(Number);
 
@@ -1174,7 +1687,6 @@ const AddProgramm = (props: any) => {
     };
 
     return duration;
-    //return `${durationHours} hours and ${durationMinutes} minutes`;
   };
   const compareTimes = (time1: string, time2: string) => {
     let ref = 0;
@@ -1187,7 +1699,6 @@ const AddProgramm = (props: any) => {
   };
 
   const accumulateDurations = (durations: any) => {
-    console.log("Api durations", durations);
     let totalDuration = {
       hours: 0,
       minutes: 0,
@@ -1197,7 +1708,6 @@ const AddProgramm = (props: any) => {
       const minutes = Math.floor((duration.duration % 3600) / 60);
       totalDuration.hours += hours;
       totalDuration.minutes += minutes;
-      console.log("Tempo Total", totalDuration);
     }
 
     let totalMinutes = totalDuration.hours * 60 + totalDuration.minutes;
@@ -1210,14 +1720,11 @@ const AddProgramm = (props: any) => {
       minutes: valdMinutes,
     };
 
-    console.log("Total", total);
-
     return total;
   };
   const getPreviousDay = (date: string) => {
     let t = createDateFromStrings(date, "00:00:00");
     t.setDate(t.getDate() - 1);
-    // return t.toISOString().split("T")[0];
     const year = t.getFullYear();
     const month = t.getMonth() + 1;
     const day = t.getDate().toLocaleString();
@@ -1235,21 +1742,11 @@ const AddProgramm = (props: any) => {
     <React.Fragment>
       <div className="page-content">
         <Container fluid>
-          <Breadcrumb title="Add New Program" pageTitle="Programming" />
+          <Breadcrumb title="Program" pageTitle="Management" />
           <Card className="overflow-hidden">
-            <Card.Header className="border-0">
-              <div className="hstack gap-2 justify-content-end">
-                <Button variant="success" id="add-btn" className="btn-sm">
-                  Save & Send
-                </Button>
-                {/* <Button variant="info" id="add-btn" className="btn-sm">
-                  Quick Save
-                </Button> */}
-              </div>
-            </Card.Header>
             <Card.Body className="form-steps">
               <Card>
-                <Card.Body className="form-steps" style={{ height: "80vh" }}>
+                <Card.Body className="form-steps" style={{ height: "70vh" }}>
                   <Form
                     className="vertical-navs-step"
                     onSubmit={onSubmitProgramm}
@@ -1259,258 +1756,371 @@ const AddProgramm = (props: any) => {
                         <Tab.Pane eventKey="1">
                           <Row>
                             <Col lg={4}>
+                              {/* <Row>
+                                <Col lg={2}>
+                                  <div className="form-check mb-2">
+                                    <input
+                                      className="form-check-input"
+                                      type="radio"
+                                      name="flexRadioDefault"
+                                      id="flexRadioDefault1"
+                                      onChange={radioHandler}
+                                      value="School"
+                                    />
+                                    <Form.Label
+                                      className="form-check-label fs-17"
+                                      htmlFor="flexRadioDefault1"
+                                    >
+                                      School
+                                    </Form.Label>
+                                  </div>
+                                </Col>
+                                <Col lg={2}>
+                                  <div className="form-check mb-2">
+                                    <input
+                                      className="form-check-input"
+                                      type="radio"
+                                      name="flexRadioDefault"
+                                      id="flexRadioDefault1"
+                                      onChange={radioHandler}
+                                      value="Company"
+                                    />
+                                    <Form.Label
+                                      className="form-check-label fs-17"
+                                      htmlFor="flexRadioDefault1"
+                                    >
+                                      Company
+                                    </Form.Label>
+                                  </div>
+                                </Col>
+                              </Row>
+                              {selectedClientType === "School" ? (
+                                <Row>
+                                  <Col lg={10}>
+                                    <Form.Label htmlFor="school_id">
+                                      Client Name
+                                    </Form.Label>
+                                    <div className="mb-3">
+                                      <select
+                                        className="form-select text-muted"
+                                        name="school_id"
+                                        id="school_id"
+                                        onChange={handleSelectSchoolID}
+                                      >
+                                        <option value="">Select</option>
+                                        {allSchools.map((school) => (
+                                          <option
+                                            value={`${school?._id!}`}
+                                            key={school?._id!}
+                                          >
+                                            {school.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  </Col>
+                                </Row>
+                              ) : (
+                                ""
+                              )}
+                              {selectedClientType === "Company" ? (
+                                <Row>
+                                  <Col lg={10}>
+                                    <Form.Label htmlFor="company_id">
+                                      Client Name
+                                    </Form.Label>
+                                    <div className="mb-3">
+                                      <select
+                                        className="form-select text-muted"
+                                        name="company_id"
+                                        id="company_id"
+                                        onChange={handleSelectCompanyID}
+                                      >
+                                        <option value="">Select</option>
+                                        {allCompanies.map((company) => (
+                                          <option
+                                            value={`${company?._id!}`}
+                                            key={company?._id!}
+                                          >
+                                            {company.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  </Col>
+                                </Row>
+                              ) : (
+                                ""
+                              )} */}
+                              <Row>
+                                <Col lg={10}>
+                                  <Form.Label htmlFor="programDetails.programName">
+                                    Program Name
+                                  </Form.Label>
+                                  <Form.Control
+                                    type="text"
+                                    id="programDetails.programName"
+                                    required
+                                    className="mb-2"
+                                    placeholder="Add Program Name"
+                                    name="programDetails.programName"
+                                    value={programm_name}
+                                    onChange={onChangeProgramName}
+                                  />
+                                </Col>
+                              </Row>
+                              <Row>
+                                <Col>
+                                  <Form.Label htmlFor="customerName-field">
+                                    Locations
+                                  </Form.Label>
+                                </Col>
+                              </Row>
+                              <Row className="mb-2">
+                                <Col lg={2}>
+                                  {/* <div className="d-flex gap-1"> */}
+                                  <InputGroup.Text
+                                    id="basic-addon1"
+                                    style={{ width: "100px" }}
+                                  >
+                                    From
+                                  </InputGroup.Text>
+                                </Col>
+                                <Col lg={5}>
+                                  <Autocomplete
+                                    onPlaceChanged={onPlaceChanged}
+                                    onLoad={onLoad}
+                                  >
+                                    <Form.Control
+                                      type="text"
+                                      placeholder="Origin"
+                                      ref={originRef}
+                                      id="origin"
+                                      onClick={() => {
+                                        handleLocationButtonClick();
+                                        if (nom) {
+                                          map?.panTo(nom);
+                                          map?.setZoom(15);
+                                        }
+                                      }}
+                                      onChange={onChangeProgramms}
+                                      required
+                                    />
+                                  </Autocomplete>
+                                  {/* </div> */}
+                                </Col>
+                                <Col lg={3}>
+                                  {/* <div className="d-flex justify-content-center"> */}
+                                  <Flatpickr
+                                    className="form-control text-center"
+                                    id="pickUp_time"
+                                    options={{
+                                      enableTime: true,
+                                      noCalendar: true,
+                                      dateFormat: "H:i",
+                                      time_24hr: true,
+                                      onChange: handlePickupTime,
+                                    }}
+                                  />
+                                </Col>
+                              </Row>
+                              <Row>
+                                <Col lg={1}>
+                                  <InputGroup.Text
+                                    id="basic-addon1"
+                                    style={{ width: "100px" }}
+                                  >
+                                    To
+                                  </InputGroup.Text>
+                                </Col>
+                                <Col lg={6}>
+                                  <Autocomplete
+                                    onPlaceChanged={onPlaceChangedDest}
+                                    onLoad={onLoadDest}
+                                  >
+                                    <Form.Control
+                                      type="text"
+                                      // style={{ width: "300px" }}
+                                      placeholder="Destination"
+                                      ref={destinationRef}
+                                      id="dest"
+                                      onClick={() => {
+                                        handleLocationButtonClickDest();
+                                        if (fatma) {
+                                          map?.panTo(fatma);
+                                          map?.setZoom(15);
+                                        }
+                                      }}
+                                      onChange={onChangeProgramms}
+                                    />
+                                  </Autocomplete>
+                                </Col>
+                                <Col lg={3}>
+                                  <Flatpickr
+                                    placeholder="HH:MM"
+                                    className="form-control text-center"
+                                    id="pickUp_time"
+                                    value={createDateFromStrings(
+                                      String(new Date().getFullYear()).padStart(
+                                        2,
+                                        "0"
+                                      ) +
+                                        "-" +
+                                        String(
+                                          new Date().getMonth() + 1
+                                        ).padStart(2, "0") +
+                                        "-" +
+                                        String(
+                                          new Date().getDate().toLocaleString()
+                                        ).padStart(2, "0"),
+                                      stopTimes[stopTimes.length - 1]?.hours +
+                                        ":" +
+                                        stopTimes[stopTimes.length - 1]
+                                          ?.minutes +
+                                        ":00"
+                                    ).getTime()}
+                                    disabled={true}
+                                    options={{
+                                      enableTime: true,
+                                      noCalendar: true,
+                                      dateFormat: "H:i",
+                                      time_24hr: true,
+                                    }}
+                                  />
+                                </Col>
+                              </Row>
+                              {loading ? (
+                                <p>Calculating route...</p>
+                              ) : (
+                                <Row>
+                                  <Col lg={10}>
+                                    <Button
+                                      type="submit"
+                                      onClick={calculateRoute}
+                                      className="custom-button"
+                                    >
+                                      Plan Route
+                                    </Button>
+                                  </Col>
+                                </Row>
+                              )}
                               <div
                                 style={{
-                                  maxHeight: "calc(80vh - 80px)",
+                                  marginTop: "20px",
+                                  maxHeight: "300px",
                                   overflowX: "auto",
                                 }}
                               >
-                                <Form.Label htmlFor="programName">
-                                  Name
-                                </Form.Label>
-                                <Form.Control
-                                  type="text"
-                                  id="programName"
-                                  style={{ width: "450px" }}
-                                  required
-                                  className="mb-2"
-                                  placeholder="Add Program Name"
-                                  name="programName"
-                                  value={programmData.programName}
-                                  onChange={onChangeProgramms}
-                                />
-                                <Form.Label htmlFor="customerName-field">
-                                  coordinations
-                                </Form.Label>
-
-                                <InputGroup className="mb-3">
-                                  <InputGroup.Text id="basic-addon1">
-                                    From
-                                  </InputGroup.Text>
-                                  <div className="d-flex">
-                                    <Autocomplete
-                                      onPlaceChanged={onPlaceChanged}
-                                      onLoad={onLoad}
-                                    >
-                                      <Form.Control
-                                        type="text"
-                                        style={{ width: "285px" }}
-                                        placeholder="Origin"
-                                        ref={originRef}
-                                        id="origin"
-                                        onClick={() => {
-                                          handleLocationButtonClick();
-                                          if (nom) {
-                                            map?.panTo(nom);
-                                            map?.setZoom(15);
-                                          }
-                                        }}
-                                        onChange={onChangeProgramms}
-                                        required
-                                      />
-                                    </Autocomplete>
-                                    <Flatpickr
-                                      className="form-control"
-                                      id="pickUp_time"
-                                      style={{ width: "100px" }}
-                                      options={{
-                                        enableTime: true,
-                                        noCalendar: true,
-                                        dateFormat: "H:i",
-                                        time_24hr: true,
-                                        onChange: handlePickupTime,
-                                      }}
-                                    />
-                                  </div>
-                                  {/* <p>{pickUp_time?.toDateString()}</p> */}
-                                </InputGroup>
-                                <InputGroup className="mb-3">
-                                  <InputGroup.Text id="basic-addon1">
-                                    To
-                                  </InputGroup.Text>
-                                  <div className="d-flex">
-                                    <Autocomplete
-                                      onPlaceChanged={onPlaceChangedDest}
-                                      onLoad={onLoadDest}
-                                    >
-                                      <Form.Control
-                                        type="text"
-                                        style={{ width: "300px" }}
-                                        placeholder="Destination"
-                                        ref={destinationRef}
-                                        id="dest"
-                                        onClick={() => {
-                                          handleLocationButtonClickDest();
-                                          if (fatma) {
-                                            map?.panTo(fatma);
-                                            map?.setZoom(15);
-                                          }
-                                        }}
-                                        onChange={onChangeProgramms}
-                                        required
-                                      />
-                                    </Autocomplete>
-                                    <Flatpickr
-                                      className="form-control"
-                                      id="pickUp_time"
-                                      style={{ width: "100px" }}
-                                      value={createDateFromStrings(
-                                        String(
-                                          new Date().getFullYear()
-                                        ).padStart(2, "0") +
-                                          "-" +
-                                          String(
-                                            new Date().getMonth() + 1
-                                          ).padStart(2, "0") +
-                                          "-" +
-                                          String(
-                                            new Date()
-                                              .getDate()
-                                              .toLocaleString()
-                                          ).padStart(2, "0"),
-                                        stopTimes[stopTimes.length - 1]?.hours +
-                                          ":" +
-                                          stopTimes[stopTimes.length - 1]
-                                            ?.minutes +
-                                          ":00"
-                                      ).getTime()}
-                                      disabled={true}
-                                      options={{
-                                        enableTime: true,
-                                        noCalendar: true,
-                                        dateFormat: "H:i",
-                                        time_24hr: true,
-                                      }}
-                                    />
-                                  </div>
-                                </InputGroup>
-
-                                {loading ? (
-                                  <p>Calculating route...</p>
-                                ) : (
-                                  <Button
-                                    type="submit"
-                                    onClick={calculateRoute}
-                                    className="custom-button"
-                                  >
-                                    Plan Route
-                                  </Button>
-                                )}
-
-                                <div style={{ marginTop: "20px" }}>
-                                  {stops2.map((stop, index) => (
-                                    <Row>
-                                      <Col lg={6} key={index}>
-                                        <Form.Label htmlFor="customerName-field">
-                                          Stop {index + 1}
-                                        </Form.Label>
-                                        <div className="mb-3 d-flex">
-                                          <Autocomplete
-                                            onPlaceChanged={onPlaceChangedStop}
-                                            onLoad={onLoadStop}
-                                          >
-                                            <Form.Control
-                                              type="text"
-                                              style={{ width: "280px" }}
-                                              placeholder="Stop"
-                                              ref={stopRef}
-                                              id="stop"
-                                              onClick={() => {
-                                                handleLocationButtonClickStop();
-                                              }}
-                                            />
-                                          </Autocomplete>
-                                          {
-                                            <Flatpickr
-                                              className="form-control"
-                                              style={{ width: "100px" }}
-                                              id="pickUp_time"
-                                              value={createDateFromStrings(
+                                {stops2.map((stop, index) => (
+                                  <Row>
+                                    <Col lg={7} key={index}>
+                                      <Form.Label htmlFor="customerName-field">
+                                        Stop {index + 1}
+                                      </Form.Label>
+                                      <div className="mb-3 d-flex">
+                                        <Autocomplete
+                                          onPlaceChanged={onPlaceChangedStop}
+                                          onLoad={onLoadStop}
+                                        >
+                                          <Form.Control
+                                            type="text"
+                                            style={{ width: "280px" }}
+                                            placeholder="Stop"
+                                            ref={stopRef}
+                                            id="stop"
+                                            onClick={() => {
+                                              handleLocationButtonClickStop();
+                                            }}
+                                          />
+                                        </Autocomplete>
+                                        {
+                                          <Flatpickr
+                                            className="form-control"
+                                            style={{ width: "100px" }}
+                                            id="pickUp_time"
+                                            value={createDateFromStrings(
+                                              String(
+                                                new Date().getFullYear()
+                                              ).padStart(2, "0") +
+                                                "-" +
                                                 String(
-                                                  new Date().getFullYear()
+                                                  new Date().getMonth() + 1
                                                 ).padStart(2, "0") +
-                                                  "-" +
-                                                  String(
-                                                    new Date().getMonth() + 1
-                                                  ).padStart(2, "0") +
-                                                  "-" +
-                                                  String(
-                                                    new Date()
-                                                      .getDate()
-                                                      .toLocaleString()
-                                                  ).padStart(2, "0"),
-                                                stopTimes[index]?.hours +
-                                                  ":" +
-                                                  stopTimes[index]?.minutes +
-                                                  ":00"
-                                              ).getTime()}
-                                              options={{
-                                                enableTime: true,
-                                                noCalendar: true,
-                                                dateFormat: "H:i",
-                                                time_24hr: true,
-                                              }}
-                                              onChange={(selectedDates) =>
-                                                handleStopTime(
-                                                  selectedDates,
-                                                  index
-                                                )
-                                              }
-                                            />
-                                          }
-                                        </div>
-                                      </Col>
-
-                                      <button
-                                        type="button"
-                                        className="btn btn-danger btn-icon"
-                                        onClick={() =>
-                                          handleRemoveStopClick(stop.id)
+                                                "-" +
+                                                String(
+                                                  new Date()
+                                                    .getDate()
+                                                    .toLocaleString()
+                                                ).padStart(2, "0"),
+                                              stopTimes[index]?.hours +
+                                                ":" +
+                                                stopTimes[index]?.minutes +
+                                                ":00"
+                                            ).getTime()}
+                                            options={{
+                                              enableTime: true,
+                                              noCalendar: true,
+                                              dateFormat: "H:i",
+                                              time_24hr: true,
+                                            }}
+                                            onChange={(selectedDates) =>
+                                              handleStopTime(
+                                                selectedDates,
+                                                index
+                                              )
+                                            }
+                                          />
                                         }
-                                        style={{
-                                          marginTop: "29px",
-                                          marginLeft: "152px",
-                                        }}
-                                      >
-                                        <i className="ri-delete-bin-5-line"></i>
-                                      </button>
-                                    </Row>
-                                  ))}
-                                  <div className="d-flex flex-btn-via">
-                                    <Link
-                                      to="#"
-                                      id="add-item"
-                                      className="btn btn-soft-dark fw-medium"
-                                      onClick={handleAddStopClickWrapper(
-                                        "New Stop Address"
-                                      )}
-                                      style={{ width: "150px" }}
+                                      </div>
+                                    </Col>
+                                    <button
+                                      type="button"
+                                      className="btn btn-danger btn-icon"
+                                      onClick={() =>
+                                        handleRemoveStopClick(stop.id)
+                                      }
+                                      style={{
+                                        marginTop: "29px",
+                                        marginLeft: "152px",
+                                      }}
                                     >
-                                      <i className="ri-add-line label-icon align-middle rounded-pill fs-16 me-2">
-                                        {" "}
-                                        Via
-                                      </i>
-                                    </Link>
-                                  </div>
+                                      <i className="ri-delete-bin-5-line"></i>
+                                    </button>
+                                  </Row>
+                                ))}
+                                <div className="d-flex flex-btn-via">
+                                  <Link
+                                    to="#"
+                                    id="add-item"
+                                    className="btn btn-soft-info fw-medium"
+                                    onClick={handleAddStopClickWrapper(
+                                      "New Stop Address"
+                                    )}
+                                    style={{ width: "150px" }}
+                                  >
+                                    <i className="ri-add-line label-icon align-middle rounded-pill fs-16 me-2">
+                                      {" "}
+                                      Via
+                                    </i>
+                                  </Link>
                                 </div>
                               </div>
                             </Col>
-
                             <Col lg={8}>
                               <div
                                 style={{
                                   position: "absolute",
                                   left: "0",
-                                  height: "530px",
-                                  width: "2350px",
+                                  height: "100%",
+                                  width: "100%",
                                 }}
                               >
                                 <GoogleMap
                                   center={center}
                                   zoom={15}
                                   mapContainerStyle={{
-                                    width: isMapFullScreen ? "100vw" : "43%",
-                                    height: isMapFullScreen ? "100vh" : "120%",
+                                    width: "100%",
+                                    height: "80%",
                                   }}
                                   options={{
                                     zoomControl: false,
@@ -1566,7 +2176,7 @@ const AddProgramm = (props: any) => {
                               </div>
                               <div
                                 className="d-flex align-items-end"
-                                style={{ marginTop: "670px" }}
+                                style={{ marginTop: "570px" }}
                               >
                                 <Dropdown style={{ marginLeft: "0" }}>
                                   <Dropdown.Toggle
@@ -1606,7 +2216,6 @@ const AddProgramm = (props: any) => {
                             </Col>
                           </Row>
                         </Tab.Pane>
-
                         <Tab.Pane eventKey="2">
                           <Row>
                             <div className="mt-2">
@@ -1673,7 +2282,7 @@ const AddProgramm = (props: any) => {
                             </Col>
                           </Row>
                           <Row>
-                            <Col lg={12}>
+                            <Col lg={6}>
                               <div className="mt-2">
                                 <h5 className="fs-14 mb-1">
                                   Days of week not running
@@ -1685,7 +2294,6 @@ const AddProgramm = (props: any) => {
                                   options={options1}
                                   selected={selected1}
                                   onChange={(e: any) => {
-                                    console.log("event", e);
                                     setSelected1(e);
                                   }}
                                   icons={{
@@ -1703,7 +2311,7 @@ const AddProgramm = (props: any) => {
                                     ],
                                     moveRight: (
                                       <span
-                                        className="mdi mdi-chevron-right"
+                                        className="bi bi-chevron-right"
                                         key="key"
                                       />
                                     ),
@@ -1742,10 +2350,7 @@ const AddProgramm = (props: any) => {
                               </div>
                             </Col>
                           </Row>
-                          <div
-                            className="d-flex align-items-start gap-3"
-                            style={{ marginTop: "250px" }}
-                          >
+                          <div className="d-flex align-items-start gap-3 mt-3">
                             <Button
                               type="button"
                               className="btn btn-light btn-label previestab"
@@ -1767,53 +2372,363 @@ const AddProgramm = (props: any) => {
                         </Tab.Pane>
                         <Tab.Pane eventKey="3">
                           <Row>
-                            <Col lg={6}>
-                              <div className="mb-3">
-                                <Form.Label htmlFor="recommanded_capacity">
-                                  Recommanded Capacity
-                                </Form.Label>
-                                <Form.Control
-                                  type="text"
-                                  id="recommanded_capacity"
-                                  required
-                                  className="mb-2"
-                                  name="recommanded_capacity"
-                                  value={programmData.recommanded_capacity}
-                                  onChange={onChangeProgramms}
+                            <Col lg={2}>
+                              <div className="form-check mb-2">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="flexRadioDefault"
+                                  id="flexRadioDefault1"
+                                  onChange={radioHandlerGroupCreationMode}
+                                  value="AutoGroup"
                                 />
+                                <Form.Label
+                                  className="form-check-label fs-17"
+                                  htmlFor="flexRadioDefault1"
+                                >
+                                  Auto Groups
+                                </Form.Label>
                               </div>
                             </Col>
-                            <Col lg={6}>
-                              <div className="mb-3">
-                                <Form.Label htmlFor="vehicleType">
-                                  Vehicle Type
+                            <Col lg={2}>
+                              <div className="form-check mb-2">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="flexRadioDefault"
+                                  id="flexRadioDefault1"
+                                  onChange={radioHandlerGroupCreationMode}
+                                  value="Custom"
+                                />
+                                <Form.Label
+                                  className="form-check-label fs-17"
+                                  htmlFor="flexRadioDefault1"
+                                >
+                                  Custom Groups
                                 </Form.Label>
-                                <div>
-                                  <select
-                                    className="form-select text-muted"
-                                    name="vehicleType"
-                                    id="vehicleType"
-                                    onChange={handleSelectVehicleType}
-                                  >
-                                    <option value="">
-                                      Select Vehicle Type
-                                    </option>
-                                    {AllVehicleTypes.map((vehicleType) => (
-                                      <option
-                                        value={vehicleType._id}
-                                        key={vehicleType._id}
-                                      >
-                                        {vehicleType.type}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
                               </div>
                             </Col>
                           </Row>
+                          {selectedGroupCreationMode === "AutoGroup" ? (
+                            <>
+                              <Row>
+                                <Col lg={3}>
+                                  <div className="mb-3">
+                                    <Form.Label htmlFor="recommanded_capacity">
+                                      Recommanded Capacity
+                                    </Form.Label>
+                                    <Form.Control
+                                      type="text"
+                                      id="recommanded_capacity"
+                                      required
+                                      className="mb-2"
+                                      name="recommanded_capacity"
+                                      value={recommandedCapacityState}
+                                      onChange={
+                                        onChangeRecommandedCapacityState
+                                      }
+                                    />
+                                  </div>
+                                </Col>
+                                <Col lg={3}>
+                                  <div className="mb-3">
+                                    <Form.Label htmlFor="vehicleType">
+                                      Vehicle Type
+                                    </Form.Label>
+                                    <div>
+                                      <select
+                                        className="form-select text-muted"
+                                        name="vehicleType"
+                                        id="vehicleType"
+                                        onChange={handleSelectVehicleType}
+                                      >
+                                        <option value="">
+                                          Select Vehicle Type
+                                        </option>
+                                        {filteredVehicleType.map(
+                                          (vehicleType) => (
+                                            <option
+                                              value={
+                                                vehicleType.vehicle_type._id
+                                              }
+                                              key={vehicleType.vehicle_type._id}
+                                            >
+                                              {vehicleType.vehicle_type.type}
+                                            </option>
+                                          )
+                                        )}
+                                      </select>
+                                    </div>
+                                  </div>
+                                </Col>
+                                <Col lg={3}>
+                                  <div className="mb-3">
+                                    <Form.Label htmlFor="luggageDetails">
+                                      Luggage Details
+                                    </Form.Label>
+                                    <select
+                                      className="form-select text-muted"
+                                      name="luggageDetails"
+                                      id="luggageDetails"
+                                      onChange={handleSelectLuggage}
+                                    >
+                                      <option value="">Select Luggage</option>
+                                      {filteredVehicleType.map((Luggage) => (
+                                        <option
+                                          value={Luggage.max_luggage._id}
+                                          key={Luggage.max_luggage._id}
+                                        >
+                                          {Luggage.max_luggage.description}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </Col>
+                                <Col lg={3}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-info"
+                                    onClick={() => generateGroups()}
+                                    disabled={
+                                      selectedVehicleType === "" ||
+                                      selectedLuggage === ""
+                                        ? true
+                                        : false
+                                    }
+                                    style={{ marginTop: "28px" }}
+                                  >
+                                    <span className="mdi mdi-cog"></span>{" "}
+                                    Generate
+                                  </button>
+                                </Col>
+                              </Row>
+                              <Row>{rows}</Row>
+                              <hr className="text-muted" />
+                            </>
+                          ) : selectedGroupCreationMode === "Custom" ? (
+                            <>
+                              <Row>
+                                <Col lg={4}>
+                                  <div className="mb-3">
+                                    <Form.Label htmlFor="recommanded_capacity">
+                                      Recommanded Capacity
+                                    </Form.Label>
+                                    <Form.Control
+                                      type="text"
+                                      id="recommanded_capacity"
+                                      required
+                                      className="mb-2"
+                                      name="recommanded_capacity"
+                                      value={recommandedCapacityState}
+                                      onChange={
+                                        onChangeRecommandedCapacityState
+                                      }
+                                    />
+                                  </div>
+                                </Col>
+                                <Col lg={4}>
+                                  <div className="mb-3">
+                                    <Form.Label htmlFor="recommanded_capacity">
+                                      Affected / Total
+                                    </Form.Label>
+                                    <Form.Control
+                                      type="text"
+                                      id="recommanded_capacity"
+                                      disabled
+                                      // defaultValue="0/15"
+                                      className="bg-light mb-2"
+                                      name="recommanded_capacity"
+                                      value={
+                                        affectedCounter +
+                                        "/" +
+                                        recommandedCapacityState
+                                      }
+                                    />
+                                  </div>
+                                </Col>
+                              </Row>
+                              <hr className="text-muted" />
+                              <Row
+                                className="mb-3"
+                                style={{
+                                  maxHeight: "calc(50vh - 50px)",
+                                  overflowX: "auto",
+                                }}
+                              >
+                            
+                                   {companyGroups.map((group, index) => (
+                                      <Row key={index}>
+                                        <Col lg={3}>
+                                          <Form.Label htmlFor="customerName-field">
+                                            Group Name
+                                          </Form.Label>
+                                          <Form.Control
+                                            type="text"
+                                            id="customerName-field"
+                                            className="mb-2"
+                                            name="customerName-field"
+                                            value={group.groupName}
+                                            onChange={(e) =>
+                                              onChangeCompanyGroupName(e, index)
+                                            }
+                                          />
+                                        </Col>
+                                        <Col lg={2}>
+                                          <Form.Label htmlFor="pax">
+                                            Passengers
+                                          </Form.Label>
+                                          <Form.Control
+                                            type="text"
+                                            id="pax"
+                                            className="mb-2"
+                                            name="pax"
+                                            placeholder={`1 - ${recommandedCapacityState}`}
+                                            value={group.passenger_number}
+                                            onChange={(e) =>
+                                              onChangeCompanyGroupPax(e, index)
+                                            }
+                                          />
+                                        </Col>
+                                        <Col lg={3}>
+                                          <div>
+                                            <Form.Label htmlFor="customerName-field">
+                                              Vehicle
+                                            </Form.Label>
+                                            <select
+                                              className="form-select text-muted"
+                                              name="vehicleType"
+                                              id="vehicleType"
+                                              onChange={(e) =>
+                                                handleCustomSelectCompanyVehicleType(
+                                                  e,
+                                                  index
+                                                )
+                                              }
+                                            >
+                                              <option value="">
+                                                Select Vehicle Type
+                                              </option>
+                                              {group.passenger_limit.map(
+                                                (vehicleType) => (
+                                                  <option
+                                                    value={
+                                                      vehicleType.vehicle_type
+                                                        ._id
+                                                    }
+                                                    key={
+                                                      vehicleType.vehicle_type
+                                                        ._id
+                                                    }
+                                                  >
+                                                    {
+                                                      vehicleType.vehicle_type
+                                                        .type
+                                                    }
+                                                  </option>
+                                                )
+                                              )}
+                                            </select>
+                                          </div>
+                                        </Col>
+                                        <Col lg={3}>
+                                          <div className="mb-3">
+                                            <Form.Label htmlFor="luggageDetails">
+                                              Luggage Details
+                                            </Form.Label>
+                                            <select
+                                              className="form-select text-muted"
+                                              name="luggageDetails"
+                                              id="luggageDetails"
+                                              onChange={(e) =>
+                                                handleCustomSelectCompanyLuggageDetails(
+                                                  e,
+                                                  index
+                                                )
+                                              }
+                                            >
+                                              <option value="">
+                                                Select Luggage
+                                              </option>
+                                              {group.passenger_limit.map(
+                                                (Luggage) => (
+                                                  <option
+                                                    value={
+                                                      Luggage.max_luggage._id
+                                                    }
+                                                    key={
+                                                      Luggage.max_luggage._id
+                                                    }
+                                                  >
+                                                    {
+                                                      Luggage.max_luggage
+                                                        .description
+                                                    }
+                                                  </option>
+                                                )
+                                              )}
+                                            </select>
+                                          </div>
+                                        </Col>
+                                        <Col lg={1}>
+                                          <button
+                                            type="button"
+                                            className="btn btn-danger btn-icon"
+                                            onClick={() =>
+                                              handleRemoveCompanyGroupClick(
+                                                index
+                                              )
+                                            }
+                                            style={{
+                                              marginTop: "29px",
+                                              marginBottom: "15px",
+                                              // marginLeft: "152px",
+                                            }}
+                                          >
+                                            <i className="ri-delete-bin-5-line"></i>
+                                          </button>
+                                        </Col>
+                                      </Row>
+                                    ))}
+
+                                <div className="d-flex">
+                                  <Link
+                                    to="#"
+                                    id="add-item"
+                                    className="btn btn-soft-info fw-medium"
+                                    onClick={handleAddGroupClick}
+                                  >
+                                    <i className="ri-add-line label-icon align-middle rounded-pill fs-16 me-2"></i>
+                                  </Link>
+                                </div>
+                              </Row>
+                            </>
+                          ) : (
+                            ""
+                          )}
+                          <div className="d-flex align-items-start gap-3">
+                            <Button
+                              type="button"
+                              className="btn btn-light btn-label previestab"
+                              onClick={() => setactiveVerticalTab(2)}
+                            >
+                              <i className="ri-arrow-left-line label-icon align-middle fs-16 me-2"></i>{" "}
+                              Back to Run Dates
+                            </Button>
+                            <Button
+                              type="button"
+                              className="btn btn-success btn-label right ms-auto nexttab nexttab"
+                              onClick={() => setactiveVerticalTab(4)}
+                              // disabled={disabledNext}
+                            >
+                              <i className="ri-arrow-right-line label-icon align-middle fs-16 ms-2"></i>
+                              Go To Extra
+                            </Button>
+                          </div>
+                        </Tab.Pane>
+                        <Tab.Pane eventKey="4">
                           <Row>
                             <Col lg={6}>
-                              <div className="mb-4">
+                              <div className="mb-3">
                                 <Form.Label htmlFor="journeyType">
                                   Journey Type
                                 </Form.Label>
@@ -1835,35 +2750,13 @@ const AddProgramm = (props: any) => {
                                 </select>
                               </div>
                             </Col>
-
-                            <Col lg={6}>
-                              <div className="mb-3">
-                                <Form.Label htmlFor="luggageDetails">
-                                  Luggage Details
-                                </Form.Label>
-                                <select
-                                  className="form-select text-muted"
-                                  name="luggageDetails"
-                                  id="luggageDetails"
-                                  onChange={handleSelectLuggage}
-                                >
-                                  <option value="">Select Luggage</option>
-                                  {AllLuggages.map((Luggage) => (
-                                    <option
-                                      value={Luggage._id}
-                                      key={Luggage._id}
-                                    >
-                                      {Luggage.description}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            </Col>
                           </Row>
                           <Row>
-                            <Col lg={12}>
+                            <Col lg={6}>
                               <div>
-                                <h5 className="fs-14 mb-1">Extra</h5>
+                                <Form.Label htmlFor="VertiExtraInput">
+                                  Extra
+                                </Form.Label>
                                 <p className="text-muted">
                                   Slide the selected option to the right
                                 </p>
@@ -1886,7 +2779,7 @@ const AddProgramm = (props: any) => {
                                     ],
                                     moveRight: (
                                       <span
-                                        className="mdi mdi-chevron-right"
+                                        className="bi bi-chevron-right"
                                         key="key"
                                       />
                                     ),
@@ -1924,36 +2817,122 @@ const AddProgramm = (props: any) => {
                                 />
                               </div>
                             </Col>
-                          </Row>
-                          <Row>
-                            <Col lg={12}>
-                              <div className="mb-3">
-                                <Form.Label htmlFor="VertimeassageInput">
+                            <Col lg={6}>
+                              <div>
+                                <Form.Label htmlFor="notes" className="mb-5">
                                   Notes
                                 </Form.Label>
                                 <textarea
                                   className="form-control"
-                                  id="note"
+                                  id="notes"
+                                  name="notes"
                                   rows={5}
                                   placeholder="Enter your notes"
-                                  value={programmData.note}
-                                  onChange={onChangeProgrammsNotes}
+                                  value={programm_notes}
+                                  onChange={onChangeProgramNotes}
                                 ></textarea>
                               </div>
                             </Col>
                           </Row>
 
-                          <div
-                            className="d-flex align-items-start gap-3"
-                            style={{ marginTop: "200px" }}
-                          >
+                          {/* <Row className="mt-1">
+                            <Card.Header>
+                              <div className="d-flex align-items-center">
+                                <div className="flex-shrink-0 me-3">
+                                  <div className="avatar-sm">
+                                    <div className="avatar-title rounded-circle bg-light text-primary fs-20">
+                                      <i className="mdi mdi-currency-gbp"></i>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex-grow-1">
+                                  <h5 className="card-title mb-1">Price</h5>
+                                </div>
+                              </div>
+                            </Card.Header>
+                            <Card.Body>
+                              <Row>
+                                <Col lg={3}>
+                                  <div className="mb-2">
+                                    <Form.Label htmlFor="unit_price">
+                                      Unit Price
+                                    </Form.Label>
+                                    <Form.Control
+                                      type="text"
+                                      id="unit_price"
+                                      name="unit_price"
+                                      placeholder="£ 00.00"
+                                      onChange={onChangeUnitPrice}
+                                      value={quoteUnitPrice}
+                                    />
+                                  </div>
+                                </Col>
+                                <Col lg={3}>
+                                  <div className="mb-2">
+                                    <Form.Label htmlFor="prices">
+                                      Total Price
+                                    </Form.Label>
+                                    <Form.Control
+                                      type="text"
+                                      id="prices"
+                                      name="prices"
+                                      placeholder="£ 00.00"
+                                      onChange={onChangeUnitPrice}
+                                      defaultValue={contractTotalPrice}
+                                      readOnly
+                                    />
+                                  </div>
+                                </Col>
+                                <Col lg={3}>
+                                  <div className="mb-2">
+                                    <Form.Label htmlFor="invoiceFrequency">
+                                      Invoice Frequency
+                                    </Form.Label>
+                                    <select
+                                      className="form-select text-muted"
+                                      name="invoiceFrequency"
+                                      id="invoiceFrequency"
+                                      onChange={handleSelectInvoiceFrequency}
+                                    >
+                                      <option value="">Select</option>
+                                      <option value="Daily">Daily</option>
+                                      <option value="Weekly">Weekly</option>
+                                      <option value="Bi Weekly">
+                                        Bi Weekly
+                                      </option>
+                                      <option value="Third Weekly">
+                                        Third Weekly
+                                      </option>
+                                      <option value="Monthly">Monthly</option>
+                                    </select>
+                                  </div>
+                                </Col>
+                                <Col lg={3}>
+                                  <div className="mb-2">
+                                    <Form.Label htmlFor="within_payment_days">
+                                      Within Payment Days
+                                    </Form.Label>
+                                    <Form.Control
+                                      type="text"
+                                      id="within_payment_days"
+                                      name="within_payment_days"
+                                      placeholder="1 Day"
+                                      value={programm_paymentDays}
+                                      onChange={onChangeProgramPaymentDays}
+                                    />
+                                  </div>
+                                </Col>
+                              </Row>
+                            </Card.Body>
+                          </Row> */}
+                          <div className="d-flex align-items-start gap-3">
                             <Button
                               type="button"
                               className="btn btn-light btn-label previestab"
-                              onClick={() => setactiveVerticalTab(2)}
+                              onClick={() => setactiveVerticalTab(3)}
                             >
                               <i className="ri-arrow-left-line label-icon align-middle fs-16 me-2"></i>{" "}
-                              Back to Run Dates
+                              Back to Options
                             </Button>
 
                             <Button
@@ -1967,7 +2946,7 @@ const AddProgramm = (props: any) => {
                             </Button>
                           </div>
                         </Tab.Pane>
-                        <Tab.Pane eventKey="4">
+                        <Tab.Pane eventKey="5">
                           <div
                             style={{
                               maxHeight: "calc(80vh - 80px)",
@@ -1983,10 +2962,10 @@ const AddProgramm = (props: any) => {
                             <Button
                               type="button"
                               className="btn btn-light btn-label previestab"
-                              onClick={() => setactiveVerticalTab(3)}
+                              onClick={() => setactiveVerticalTab(4)}
                             >
                               <i className="ri-arrow-left-line label-icon align-middle fs-16 me-2"></i>{" "}
-                              Back to Options
+                              Back to Extra
                             </Button>
 
                             <Button

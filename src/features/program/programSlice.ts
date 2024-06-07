@@ -1,6 +1,78 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
-export interface Program {
+export interface Programm {
+  programDetails: {
+    _id?: string;
+    programName: string;
+    origin_point: {
+      placeName: string;
+      coordinates: {
+        lat: number;
+        lng: number;
+      };
+    };
+    stops: {
+      id: string;
+      address: {
+        placeName: string;
+        coordinates: {
+          lat: number;
+          lng: number;
+        };
+      };
+      time: string;
+    }[];
+    destination_point: {
+      placeName: string;
+      coordinates: {
+        lat: number;
+        lng: number;
+      };
+    };
+    pickUp_date: string;
+    droppOff_date: string;
+    freeDays_date: string[];
+    exceptDays: string[];
+    recommanded_capacity: string;
+    extra: string[];
+    notes: string;
+    dropOff_time: string;
+    pickUp_Time: string;
+    school_id?: string;
+    company_id?: string;
+    luggage?: string;
+    vehiculeType?: string;
+    unit_price?: string;
+    total_price?: string;
+    journeyType?: string;
+    program_status?: {
+      status: string;
+      date_status: string;
+    }[];
+    within_payment_days?: string;
+    invoiceFrequency?: string;
+    notes_for_client?: {
+      msg: string;
+      date: string;
+      sender: string;
+    }[];
+  };
+  groups: {
+    type: string;
+    groupCollection: {
+      id_company?: string;
+      passenger_number?: string;
+      groupName: string;
+      student_number?: string;
+      id_school?: string;
+      vehicle_type: string;
+      luggage_details: string;
+      program?: string;
+    }[];
+  };
+}
+
+export interface ProgrammGroups {
   _id?: string;
   programName: string;
   origin_point: {
@@ -32,12 +104,11 @@ export interface Program {
   dropOff_time: string;
   pickUp_Time: string;
   school_id?: string;
-  company_id?:  string;
-    
+  company_id?: string;
+  luggage?: string;
+  vehiculeType?: string;
   unit_price?: string;
   total_price?: string;
-  vehiculeType?: string;
-  luggage?: string;
   journeyType?: string;
   program_status?: {
     status: string;
@@ -82,41 +153,76 @@ export interface UpdateStatus {
   status: string;
 }
 
-export const programSlice = createApi({
-  reducerPath: "program",
+export interface GroupInterface {
+  _id?: string;
+  groupName: string;
+  note: string;
+  startPoint: string;
+  dateStart: string;
+  timeStart: string;
+  Destination: string;
+  dateEnd: string;
+  timeEnd: string;
+  status: string;
+  id_school: string;
+  program: string;
+  employees: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    id_file: string;
+    groupId?: string;
+    groupJoiningDate?: string;
+  }[];
+}
+
+export const programmSlice = createApi({
+  reducerPath: "programm",
   baseQuery: fetchBaseQuery({
-    baseUrl: "http://localhost:8800/programs",
+    baseUrl: "http://localhost:8800/programs/",
   }),
-  tagTypes: ["Program",
-  "SendResponse",
-  "ConvertTo",
-  "ConvertToQuote",
-  "UpdateStatus"],
+  tagTypes: [
+    "Programm",
+    "SendResponse",
+    "ConvertTo",
+    "ConvertToQuote",
+    "UpdateStatus",
+    "ProgrammGroups",
+    "GroupInterface"
+  ],
   endpoints(builder) {
     return {
-      fetchPrograms: builder.query<Program[], number | void>({
+      fetchProgramms: builder.query<ProgrammGroups[], number | void>({
         query() {
           return `/getAllPrograms`;
         },
-        providesTags: ["Program"],
+        providesTags: ["ProgrammGroups"],
       }),
-      fetchProgrammById: builder.query<Program, string | void>({
+      fetchProgrammById: builder.query<Programm, string | void>({
         query: (_id) => ({
           url: `/getProgrammById/${_id}`,
           method: "GET",
         }),
-        providesTags: ["Program"],
+        providesTags: ["Programm"],
       }),
-      addProgram: builder.mutation<void, Program>({
+      addProgramm: builder.mutation<void, Programm>({
         query(payload) {
           return {
-            url: "/newProgram",
+            url: "/newProgramm",
             method: "POST",
             body: payload,
           };
         },
-        invalidatesTags: ["Program"],
+        invalidatesTags: ["Programm"],
       }),
+      fetchGroupEmployeeByIdGroup: builder.query<GroupInterface[], string | void>({
+        query: (_id) => ({
+          url: `/get-program-groups-employees/${_id}`,
+          method: "GET",
+        }),
+        providesTags: ["GroupInterface"],
+      }),
+
       sendResponse: builder.mutation<void, SendResponse>({
         query({
           id,
@@ -141,7 +247,7 @@ export const programSlice = createApi({
             },
           };
         },
-        invalidatesTags: ["Program", "SendResponse"],
+        invalidatesTags: ["Programm", "SendResponse"],
       }),
       convertToContract: builder.mutation<void, ConvertTo>({
         query({ idProgram }) {
@@ -153,7 +259,7 @@ export const programSlice = createApi({
             },
           };
         },
-        invalidatesTags: ["Program", "ConvertTo"],
+        invalidatesTags: ["Programm", "ConvertTo"],
       }),
       convertToQuote: builder.mutation<void, ConvertToQuote>({
         query({ id_schedule }) {
@@ -165,7 +271,7 @@ export const programSlice = createApi({
             },
           };
         },
-        invalidatesTags: ["Program", "ConvertToQuote"],
+        invalidatesTags: ["Programm", "ConvertToQuote"],
       }),
       updateStatus: builder.mutation<void, UpdateStatus>({
         query({ id, status }) {
@@ -178,26 +284,27 @@ export const programSlice = createApi({
             },
           };
         },
-        invalidatesTags: ["Program", "UpdateStatus"],
+        invalidatesTags: ["Programm", "UpdateStatus"],
       }),
       deleteProgram: builder.mutation<void, string>({
         query: (_id) => ({
           url: `/deleteProgram/${_id}`,
           method: "DELETE",
         }),
-        invalidatesTags: ["Program"],
+        invalidatesTags: ["Programm"],
       }),
     };
   },
 });
 
 export const {
-  useAddProgramMutation,
-  useFetchProgramsQuery,
+  useAddProgrammMutation,
+  useFetchProgrammsQuery,
   useFetchProgrammByIdQuery,
   useSendResponseMutation,
   useConvertToContractMutation,
   useConvertToQuoteMutation,
   useDeleteProgramMutation,
   useUpdateStatusMutation,
-} = programSlice;
+  useFetchGroupEmployeeByIdGroupQuery
+} = programmSlice;

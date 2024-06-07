@@ -16,7 +16,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   useConvertToContractMutation,
   useConvertToQuoteMutation,
-  useFetchProgramsQuery,
+  useFetchProgrammsQuery,
   useSendResponseMutation,
   useDeleteProgramMutation,
   useUpdateStatusMutation,
@@ -43,9 +43,10 @@ const ProgramList = () => {
   const [modal_Pickup, setmodal_Pickup] = useState<boolean>(false);
   const [modal_Destination, setmodal_Destination] = useState<boolean>(false);
   const [modal_Action, setmodal_Action] = useState<boolean>(false);
-  const { data = [] } = useFetchProgramsQuery();
+  const { data = [] } = useFetchProgrammsQuery();
+  console.log("data",data)
   const companyPrograms = data.filter((programForCompany:any)=> programForCompany?.company_id?._id! === user?._id!)
-  console.log(data)
+  console.log("program",companyPrograms)
   function tog_Pickup() {
     setmodal_Pickup(!modal_Pickup);
   }
@@ -296,6 +297,29 @@ const ProgramList = () => {
       selector: (row: any) => {
         return (
           <ul className="hstack gap-2 list-unstyled mb-0">
+             <li>
+              <Link
+                to={"/programgroups"}
+                className="badge badge-soft-success edit-item-btn"
+                state={row}
+                onClick={() =>  localStorage.setItem('id_current_prog', row._id)}
+              >
+                <i
+                  className="ph ph-users-three"
+                  style={{
+                    transition: "transform 0.3s ease-in-out",
+                    cursor: "pointer",
+                    fontSize: "1.5em",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.transform = "scale(1.2)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.transform = "scale(1)")
+                  }
+                ></i>
+              </Link>
+            </li>
             <li>
               <Link
                 to={`/programming/list-of-programs/programDetail`}

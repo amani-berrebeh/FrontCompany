@@ -21,7 +21,7 @@ export const journeySlice = createApi({
       }),
       fetchJourneyById: builder.query<Journey, string | void>({
         query: (_id) => ({
-          url: `/getJourneyById/${_id}`,
+          url: `/getJourney/${_id}`,
           method: "GET",
         }),
         providesTags: ["Journey"],

@@ -31,6 +31,9 @@ export interface Employee {
     status:string,
 
 }
+export interface EmployeesStops {
+  employeeList: any[]
+}
 
 export const employeeSlice = createApi({
   reducerPath: "Employee",
@@ -93,6 +96,17 @@ export const employeeSlice = createApi({
         invalidatesTags: ['Employee'],
       }),
 
+      updateEmployeeStops: builder.mutation<void, EmployeesStops>({
+        query(payload) {
+          return {
+            url: "/update-employees-stops",
+            method: "POST",
+            body: payload,
+          };
+        },
+        //invalidatesTags: ["StudentsStops"],
+      }),
+
     };
   },
 });
@@ -103,5 +117,6 @@ export const {
   useDeleteEmployeeMutation,
   useUpdateEmployeeMutation,
   useFetchEmployeeByCompanyQuery,
-  useRemoveEmployeeFromGroupMutation
+  useRemoveEmployeeFromGroupMutation,
+  useUpdateEmployeeStopsMutation
 } = employeeSlice;

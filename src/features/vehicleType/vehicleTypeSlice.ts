@@ -23,7 +23,7 @@ export const vehicleTypeSlice = createApi({
       }),
       fetchVehicleTypeById: builder.query<VehicleType, string | void>({
         query: (_id) => ({
-          url: `/getVehicleTypeById/${_id}`,
+          url: `/getVehiclesType/${_id}`,
           method: "GET",
         }),
         providesTags: ["VehicleType"],

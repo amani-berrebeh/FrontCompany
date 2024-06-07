@@ -91,6 +91,8 @@ import ProgramDetail from "pages/Programming/programList/ProgramDetail";
 import ArchivedComplains from "pages/claims/ArchivedComplains";
 import Login from "pages/Authentication/Login";
 import Contract from "pages/Contracts";
+import StopsManagement from "pages/Programming/Programs/StopManagement";
+import ProgramGroups from "pages/Programming/Programs/ProgramGroups";
 
 
 
@@ -115,6 +117,8 @@ const authProtectedRoutes = [
   { path: "/programming/list-of-programs/programDetail", component: < ProgramDetail/> },
   { path: "/program/:name", component: < ProgramClone/> },
   { path: "/program-details/:name", component: < ProgramDetails/> },
+  { path: "/stopsmanagement", component: < StopsManagement/> },
+  { path: "/programgroups", component: < ProgramGroups/> },
 
   //? Payment
   { path: "/payment-employee", component: <EmployeePayment /> },
